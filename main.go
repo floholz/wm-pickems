@@ -13,6 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/pocketbase/pocketbase/tools/hook"
 
+	"github.com/floholz/wm-pickems/internal/forecast"
 	"github.com/floholz/wm-pickems/internal/leagues"
 	"github.com/floholz/wm-pickems/internal/seed"
 	wmsync "github.com/floholz/wm-pickems/internal/sync"
@@ -39,6 +40,7 @@ func main() {
 		wmsync.Register(e.App, e)
 		leagues.Register(e.App, e)
 		tips.Register(e.App, e)
+		forecast.Register(e.App, e)
 		return e.Next()
 	})
 
