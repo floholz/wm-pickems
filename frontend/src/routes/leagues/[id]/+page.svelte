@@ -1,7 +1,58 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { api, type LeaderboardRow } from '$lib/api';
+	import { pb } from '$lib/pb';
 	import { Eye, EyeOff, Copy } from '@lucide/svelte';
+
+	interface Cfg {
+		match: {
+			tendency: number;
+			exact: number;
+			totalGoals: number;
+			goalDiff: number;
+			koOtBonus: boolean;
+			advancer: number;
+		};
+		forecast: {
+			groupPosition: number;
+			perfectGroupBonus: number;
+			thirdQualifier: number;
+			round: Record<string, number>;
+		};
+		tiebreakers: string[];
+	}
+	let cfg = $state<Cfg | null>(null);
+
+	const tbLabel: Record<string, string> = {
+		points: 'Total points',
+		exactScores: 'Most exact scores',
+		correctWinners: 'Most correct winners',
+		goalDiffDeviation: 'Smallest goal-difference error vs. results',
+		earliestEdit: 'Earliest last edit (submitted first)'
+	};
+	const roundLabel: Record<string, string> = {
+		R32: 'Round of 32',
+		R16: 'Round of 16',
+		QF: 'Quarter-final',
+		SF: 'Semi-final',
+		FINAL: 'Final',
+		CHAMPION: 'Champion'
+	};
+
+	async function loadConfig(lid: string) {
+		try {
+			const lg = await pb.collection('leagues').getOne(lid);
+			const scId = lg.scoringConfig as string;
+			const rec = scId
+				? await pb.collection('scoring_configs').getOne(scId)
+				: await pb
+						.collection('scoring_configs')
+						.getFirstListItem('isDefault = true');
+			cfg = rec.config as Cfg;
+		} catch {
+			/* legend just won't show */
+		}
+	}
 
 	let revealed = $state(false);
 
@@ -16,6 +67,7 @@
 	$effect(() => {
 		const lid = id;
 		loaded = false;
+		loadConfig(lid);
 		Promise.all([api.leaderboard(lid), api.myLeagues()])
 			.then(([lb, mine]) => {
 				league = lb.league;
@@ -87,10 +139,62 @@
 			</tbody>
 		</table>
 		<p class="muted small note">
-			Points update automatically as results come in. Ties break on exact
-			scores, then correct winners, then goal-difference accuracy.
+			Points update automatically as results come in.
 		</p>
 	</section>
+
+	{#if cfg}
+		<details class="card legend">
+			<summary>How points work</summary>
+
+			<h4>Per match (your Tip)</h4>
+			<ul class="leg">
+				<li><span>Correct result (1 / X / 2)</span><b>{cfg.match.tendency} pt</b></li>
+				<li><span>Exact score</span><b>+{cfg.match.exact} pt</b></li>
+				<li><span>Correct total number of goals</span><b>+{cfg.match.totalGoals} pt</b></li>
+				<li><span>Correct goal difference</span><b>+{cfg.match.goalDiff} pt</b></li>
+				<li><span>Knockout: correct team advances</span><b>+{cfg.match.advancer} pt</b></li>
+				{#if cfg.match.koOtBonus}
+					<li>
+						<span>Knockout going to extra time: the score rules also
+							apply to your after-extra-time prediction</span>
+						<b>bonus</b>
+					</li>
+				{/if}
+			</ul>
+			<p class="muted small">
+				A perfect score therefore earns
+				{cfg.match.tendency +
+					cfg.match.exact +
+					cfg.match.totalGoals +
+					cfg.match.goalDiff} pt (group stage).
+			</p>
+
+			<h4>Tournament Forecast</h4>
+			<ul class="leg">
+				<li><span>Each team in its correct final group position</span><b>{cfg.forecast.groupPosition} pt</b></li>
+				<li><span>Whole group ordered perfectly (bonus)</span><b>+{cfg.forecast.perfectGroupBonus} pt</b></li>
+				<li><span>Each correctly predicted best-third qualifier</span><b>{cfg.forecast.thirdQualifier} pt</b></li>
+			</ul>
+			<p class="muted small">
+				Reaching a knockout round (per correctly predicted team):
+			</p>
+			<ul class="leg">
+				{#each Object.entries(roundLabel) as [k, lbl] (k)}
+					{#if cfg.forecast.round[k] != null}
+						<li><span>{lbl}</span><b>{cfg.forecast.round[k]} pt</b></li>
+					{/if}
+				{/each}
+			</ul>
+
+			<h4>Tiebreakers (in order)</h4>
+			<ol class="tiebreak">
+				{#each cfg.tiebreakers as t (t)}
+					<li>{tbLabel[t] ?? t}</li>
+				{/each}
+			</ol>
+		</details>
+	{/if}
 {/if}
 
 <style>
@@ -180,5 +284,48 @@
 	}
 	.note {
 		margin: 0.75rem 0 0;
+	}
+	.legend summary {
+		cursor: pointer;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		font-size: 0.85rem;
+		color: var(--accent);
+	}
+	.legend h4 {
+		margin: 1rem 0 0.5rem;
+		font-size: 0.95rem;
+	}
+	.legend .small {
+		margin: 0.4rem 0 0;
+	}
+	ul.leg {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	ul.leg li {
+		display: flex;
+		align-items: baseline;
+		gap: 0.75rem;
+		padding: 0.4rem 0;
+		border-bottom: 1px solid var(--border);
+	}
+	ul.leg li span {
+		flex: 1;
+	}
+	ul.leg li b {
+		font-family: var(--font-mono);
+		color: var(--accent);
+		white-space: nowrap;
+	}
+	ol.tiebreak {
+		margin: 0.5rem 0 0;
+		padding-left: 1.3rem;
+		line-height: 1.8;
+	}
+	ol.tiebreak li {
+		padding-left: 0.3rem;
 	}
 </style>
