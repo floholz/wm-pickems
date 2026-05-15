@@ -39,6 +39,7 @@
 {:else if !loaded}
 	<p class="muted">Loading…</p>
 {:else if league}
+	<p class="kicker">League</p>
 	<h1>{league.name}</h1>
 
 	<section class="card invite">
@@ -63,16 +64,17 @@
 			</thead>
 			<tbody>
 				{#each sorted as r, i (r.userId)}
-					<tr>
+					<tr class:lead={i === 0}>
 						<td class="rank">{i + 1}</td>
 						<td>{r.name}</td>
-						<td class="num">{r[tab]}</td>
+						<td class="num digits">{r[tab]}</td>
 					</tr>
 				{/each}
 			</tbody>
 		</table>
 		<p class="muted small note">
-			Points start counting once matches are played (scoring engine — Phase 5).
+			Points update automatically as results come in. Ties break on exact
+			scores, then correct winners, then goal-difference accuracy.
 		</p>
 	</section>
 {/if}
@@ -140,6 +142,14 @@
 	.rank {
 		width: 2rem;
 		color: var(--muted);
+		font-family: var(--font-mono);
+	}
+	tr.lead td {
+		background: color-mix(in srgb, var(--accent) 9%, transparent);
+	}
+	tr.lead .rank {
+		color: var(--accent);
+		font-weight: 800;
 	}
 	.note {
 		margin: 0.75rem 0 0;

@@ -33,6 +33,7 @@
 	);
 </script>
 
+<p class="kicker">Match predictions</p>
 <h1>Tips</h1>
 <p class="muted">Predict every match. Editable until kickoff.</p>
 

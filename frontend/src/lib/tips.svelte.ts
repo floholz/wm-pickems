@@ -20,6 +20,14 @@ export interface Match {
 	awayTeam: string;
 	homeLabel: string;
 	awayLabel: string;
+	ftHome: number;
+	ftAway: number;
+	etHome: number;
+	etAway: number;
+	penHome: number;
+	penAway: number;
+	advancer: string;
+	finalizedAt: string;
 }
 
 export interface Tip {

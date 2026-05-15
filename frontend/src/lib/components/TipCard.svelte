@@ -136,9 +136,9 @@
 			<span class="t">
 				<Flag iso2={H.iso2} code={H.code} /> <span class="tn">{H.name}</span>
 			</span>
-			<span class="score">
+			<span class="score digits">
 				{#if existing}
-					<b>{existing.ftHome}</b>:<b>{existing.ftAway}</b>
+					<b>{existing.ftHome}</b><span class="cln">:</span><b>{existing.ftAway}</b>
 				{:else}
 					<span class="muted">–:–</span>
 				{/if}

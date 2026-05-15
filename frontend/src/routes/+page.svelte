@@ -38,10 +38,12 @@
 </script>
 
 <header>
-	<h1>Hi, {auth.user?.name}</h1>
-	<p class="muted">World Cup 2026 · 11 Jun – 19 Jul</p>
+	<p class="kicker">Matchday HQ</p>
+	<h1>Hi,&nbsp;{auth.user?.name}</h1>
+	<p class="muted sd">World Cup 2026 · 11 Jun – 19 Jul · 48 nations</p>
 </header>
 
+<div class="stagger">
 <section class="card">
 	<h3>Your next moves</h3>
 	<div class="moves">
@@ -81,6 +83,7 @@
 		{/each}
 	{/if}
 </section>
+</div>
 
 <style>
 	header {

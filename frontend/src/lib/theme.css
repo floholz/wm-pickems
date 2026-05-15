@@ -1,50 +1,70 @@
 /* =========================================================================
-   THEME — single source of truth for the app's look.
+   THEME — single source of truth. "FLOODLIGHT": matchday-broadcast look.
+   Midnight stadium · electric pitch-lime · sunset-orange "live" · condensed
+   poster headlines · mono scoreboard digits · grain + diagonal energy.
 
-   To re-skin the whole app, edit ONLY this file. Every component and page
-   references these CSS custom properties; no colour/raddi/shadow literals
-   live anywhere else. (A future light theme can be added by overriding these
-   under a `:root[data-theme='light']` block at the bottom.)
+   Re-skin the whole app by editing ONLY this file. No colour/font/radius
+   literals live anywhere else. (Light theme could override under
+   :root[data-theme='light'].)
    ========================================================================= */
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Spline+Sans+Mono:wght@500;700&display=swap');
+
 :root {
 	/* ---- Brand ---- */
-	--accent: #4f8cff; /* primary actions, links, active nav */
-	--accent-2: #29d3a4; /* secondary accent, gradients */
-	--accent-fg: #ffffff; /* text/icon on a solid --accent fill */
-	--accent-ink: #07122b; /* text/icon on a bright accent gradient */
+	--accent: #c8fb50; /* pitch-lime — primary actions, links, focus */
+	--accent-2: #ff5a36; /* sunset-orange — live, highlights, alerts */
+	--accent-fg: #08110a; /* ink on a solid lime fill */
+	--accent-ink: #08110a; /* ink on a bright accent gradient */
 
 	/* ---- Surfaces & text ---- */
-	--bg: #0b1020; /* app background */
-	--surface: #141a30; /* cards, bars */
-	--surface-2: #1c2440; /* insets, chips, hover */
-	--border: #2a3354; /* hairlines, outlines */
-	--text: #e8ecf8; /* primary text */
-	--muted: #97a0c0; /* secondary text */
+	--bg: #080b14; /* stadium night */
+	--surface: #10131f; /* cards, bars */
+	--surface-2: #181d2e; /* insets, chips, hover */
+	--border: #283047; /* hairlines */
+	--text: #f3f5fb; /* primary text */
+	--muted: #8b93b0; /* secondary text */
 
 	/* ---- Status ---- */
-	--danger: #ff5d6c;
-	--success: #29d3a4;
-	--warning: #ffb454;
+	--danger: #ff4d5e;
+	--success: #c8fb50;
+	--warning: #ffb43d;
+	--live: #ff5a36;
 
 	/* ---- Effects ---- */
-	--radius: 14px;
+	--radius: 16px;
 	--radius-sm: 10px;
 	--radius-pill: 999px;
 	--ring: 2px solid var(--accent);
-	--shadow-pop: 0 12px 30px rgba(0, 0, 0, 0.45);
+	--shadow-pop: 0 18px 44px -12px rgba(0, 0, 0, 0.7);
+	--glow: 0 0 0 1px rgba(200, 251, 80, 0.25), 0 8px 30px -8px rgba(200, 251, 80, 0.35);
+
+	/* Atmosphere: floodlight glow + diagonal pitch wash, layered on --bg. */
+	--bg-atmosphere:
+		radial-gradient(
+			120% 80% at 85% -10%,
+			rgba(255, 90, 54, 0.14),
+			transparent 55%
+		),
+		radial-gradient(
+			90% 70% at 0% 0%,
+			rgba(200, 251, 80, 0.1),
+			transparent 50%
+		);
+
+	/* ---- Type ---- */
+	--font: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-display: 'Anton', 'Archivo', sans-serif; /* condensed poster */
+	--font-mono: 'Spline Sans Mono', ui-monospace, monospace; /* scoreboard */
 
 	/* ---- Layout metrics ---- */
-	--maxw: 720px;
-	--nav-h: 64px; /* mobile bottom tab bar */
-	--topbar-h: 56px; /* mobile top header */
-	--rail-w: 230px; /* desktop side rail */
-
-	/* ---- Typography ---- */
-	--font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--maxw: 740px;
+	--nav-h: 66px;
+	--topbar-h: 58px;
+	--rail-w: 240px;
 }
 
 @media (min-width: 900px) {
 	:root {
-		--maxw: 1080px;
+		--maxw: 1120px;
 	}
 }

@@ -54,6 +54,7 @@
 	}
 </script>
 
+<p class="kicker">Play your friends</p>
 <h1>Leagues</h1>
 <p class="muted">Private competitions — your predictions vs. your friends'.</p>
 

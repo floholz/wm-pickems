@@ -74,6 +74,7 @@
 	}
 </script>
 
+<p class="kicker">The big call</p>
 <h1>Forecast</h1>
 <p class="muted">
 	Your one-time tournament call. {#if fs.locked}<b>Locked.</b>{:else}Locks at
