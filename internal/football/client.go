@@ -104,7 +104,13 @@ type scorePair struct {
 
 // Fixtures returns every WC2026 fixture in a single request.
 func (c *Client) Fixtures(ctx context.Context) ([]Fixture, error) {
-	url := fmt.Sprintf("%s/fixtures?league=%d&season=%d", baseURL, leagueID, season)
+	return c.FixturesForSeason(ctx, season)
+}
+
+// FixturesForSeason fetches the World Cup fixtures for any season (used by the
+// dev API diagnostic to replay a finished tournament, e.g. 2022).
+func (c *Client) FixturesForSeason(ctx context.Context, yr int) ([]Fixture, error) {
+	url := fmt.Sprintf("%s/fixtures?league=%d&season=%d", baseURL, leagueID, yr)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -148,6 +154,30 @@ func (c *Client) Fixtures(ctx context.Context) ([]Fixture, error) {
 		})
 	}
 	return out, nil
+}
+
+// Status reports the account/plan and request quota (api-football /status).
+func (c *Client) Status(ctx context.Context) (map[string]any, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/status", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("x-apisports-key", c.key)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("api-football: status %d", resp.StatusCode)
+	}
+	var out struct {
+		Response map[string]any `json:"response"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out.Response, nil
 }
 
 // NormalizeName lowercases and strips non-alphanumerics so provider team names

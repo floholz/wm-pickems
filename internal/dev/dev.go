@@ -6,17 +6,20 @@
 package dev
 
 import (
+	"context"
 	"fmt"
 	"hash/fnv"
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 
 	"github.com/floholz/wm-pickems/internal/clock"
+	"github.com/floholz/wm-pickems/internal/football"
 	"github.com/floholz/wm-pickems/internal/forecast"
 	"github.com/floholz/wm-pickems/internal/scoring"
 	wmsync "github.com/floholz/wm-pickems/internal/sync"
@@ -281,6 +284,41 @@ func Register(app core.App, se *core.ServeEvent) {
 
 	g.GET("/state", func(e *core.RequestEvent) error {
 		return e.JSON(http.StatusOK, state(app))
+	})
+
+	// GET /api/dev/apicheck?season=2026 — validate the live API: plan/quota,
+	// schema parse, team-name mapping vs our seed, our-match coverage, and
+	// the status/ET/penalty distribution. Point season at a finished World
+	// Cup (e.g. 2022) to exercise the results path before 2026 kicks off.
+	g.GET("/apicheck", func(e *core.RequestEvent) error {
+		key := os.Getenv("API_FOOTBALL_KEY")
+		if key == "" {
+			return e.JSON(400, map[string]string{"error": "API_FOOTBALL_KEY not set"})
+		}
+		yr := 2026
+		if s := e.Request.URL.Query().Get("season"); s != "" {
+			if n, err := strconv.Atoi(s); err == nil {
+				yr = n
+			}
+		}
+		ctx, cancel := context.WithTimeout(e.Request.Context(), 30*time.Second)
+		defer cancel()
+		client := football.New(key)
+		out := map[string]any{}
+		if st, err := client.Status(ctx); err == nil {
+			out["account"] = st
+		} else {
+			out["statusError"] = err.Error()
+		}
+		rep, err := wmsync.APICheck(ctx, app, client, yr)
+		if err != nil {
+			out["error"] = err.Error()
+			return e.JSON(502, out)
+		}
+		for k, v := range rep {
+			out[k] = v
+		}
+		return e.JSON(http.StatusOK, out)
 	})
 
 	// POST /api/dev/advance { "timestamp": "2026-06-20T16:20:00Z" }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/pocketbase/pocketbase/apis"
@@ -143,7 +144,14 @@ func SyncOnce(ctx context.Context, app core.App, client *football.Client) error 
 		case f.Live():
 			status = "live"
 		}
-		applyResult(rec, status, f.FTHome, f.FTAway, f.ETHome, f.ETAway, f.PenHome, f.PenAway)
+		// API `score.extratime` is the ET-only delta; our model (and Tips /
+		// scoring) use the cumulative after-120 score, which is exactly the
+		// provider `goals` field once a match has gone to extra time.
+		var etH, etA *int
+		if f.ETHome != nil || f.ETAway != nil {
+			etH, etA = f.HomeGoals, f.AwayGoals
+		}
+		applyResult(rec, status, f.FTHome, f.FTAway, etH, etA, f.PenHome, f.PenAway)
 		if app.Save(rec) == nil {
 			updated++
 		}
@@ -154,6 +162,88 @@ func SyncOnce(ctx context.Context, app core.App, client *football.Client) error 
 	}
 	log.Printf("[sync] fixtures=%d updated=%d", len(fixtures), updated)
 	return nil
+}
+
+// APICheck is a dev diagnostic: fetch a season's fixtures from API-Football
+// and report parse health, team-name mapping coverage against our seed, how
+// many of our match rows resolve, and the status / ET / penalty distribution
+// (point it at a finished season like 2022 to validate the results path).
+func APICheck(ctx context.Context, app core.App, client *football.Client, yr int) (map[string]any, error) {
+	fixtures, err := client.FixturesForSeason(ctx, yr)
+	if err != nil {
+		return nil, err
+	}
+
+	teams, _ := app.FindRecordsByFilter("teams", "id != ''", "", 0, 0)
+	seedCanon := map[string]string{} // canonName -> seeded display name
+	teamName := map[string]string{}  // teamId -> canonName
+	for _, t := range teams {
+		c := canonName(t.GetString("name"))
+		seedCanon[c] = t.GetString("name")
+		teamName[t.Id] = c
+	}
+
+	matches, _ := app.FindRecordsByFilter("matches", "id != ''", "kickoff", 0, 0)
+	byPair := map[string]*core.Record{}
+	for _, m := range matches {
+		h, a := teamName[m.GetString("homeTeam")], teamName[m.GetString("awayTeam")]
+		if h != "" && a != "" {
+			byPair[h+"|"+a] = m
+		}
+	}
+
+	statusHist := map[string]int{}
+	unmapped := map[string]bool{}
+	matchedRows := map[string]bool{}
+	etCount, penCount := 0, 0
+	var sample []map[string]any
+
+	for _, f := range fixtures {
+		statusHist[f.Status]++
+		for _, nm := range []string{f.HomeName, f.AwayName} {
+			if _, ok := seedCanon[canonName(nm)]; !ok {
+				unmapped[nm] = true
+			}
+		}
+		if rec, ok := byPair[canonName(f.HomeName)+"|"+canonName(f.AwayName)]; ok {
+			matchedRows[rec.Id] = true
+		}
+		if f.ETHome != nil || f.ETAway != nil {
+			etCount++
+		}
+		if f.PenHome != nil || f.PenAway != nil {
+			penCount++
+		}
+		// Prefer extra-time / penalty fixtures in the sample — that's the
+		// path most worth eyeballing.
+		if (f.ETHome != nil || f.PenHome != nil) && len(sample) < 6 {
+			sample = append(sample, map[string]any{
+				"round": f.Round, "status": f.Status,
+				"home": f.HomeName, "away": f.AwayName,
+				"ft":                []any{f.FTHome, f.FTAway},
+				"et":                []any{f.ETHome, f.ETAway},
+				"pen":               []any{f.PenHome, f.PenAway},
+				"advancerDerivable": f.Finished(),
+			})
+		}
+	}
+	unm := make([]string, 0, len(unmapped))
+	for n := range unmapped {
+		unm = append(unm, n)
+	}
+	sort.Strings(unm)
+
+	return map[string]any{
+		"season":           yr,
+		"fixtures":         len(fixtures),
+		"statusHistogram":  statusHist,
+		"unmappedTeams":    unm,
+		"ourMatchesTotal":  len(matches),
+		"ourMatchesMapped": len(matchedRows),
+		"withExtraTime":    etCount,
+		"withPenalties":    penCount,
+		"sample":           sample,
+	}, nil
 }
 
 func ip(v *int) int {
