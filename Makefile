@@ -12,7 +12,8 @@ dev-frontend: ## Run SvelteKit dev server (proxies /api to :8090)
 dev-backend: ## Run PocketBase backend on :8090
 	go run . serve --http=127.0.0.1:8090 --dir=./pb_data
 
-build-frontend: ## Build the SPA into internal/web/build
+build-frontend: ## Build the SPA into internal/web/build (cleaned first)
+	rm -rf internal/web/build && mkdir -p internal/web/build
 	cd frontend && npm run build
 
 build: build-frontend ## Build the single binary (frontend embedded)

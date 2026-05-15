@@ -2,6 +2,7 @@
 	import { tipsStore, isLocked, type Match } from '$lib/tips.svelte';
 	import TipCard from '$lib/components/TipCard.svelte';
 	import { collapseOnScroll } from '$lib/actions';
+	import { LocateFixed } from '@lucide/svelte';
 
 	let tab = $state<'upcoming' | 'group' | 'ko' | 'all'>('upcoming');
 
@@ -17,6 +18,22 @@
 			return true;
 		})
 	);
+
+	// "Now" = the next match not yet kicked off (or the last one if the
+	// tournament is over) within the current filter.
+	let nowId = $derived.by(() => {
+		const now = Date.now();
+		const next = filtered.find(
+			(m) => new Date(m.kickoff).getTime() >= now
+		);
+		return (next ?? filtered[filtered.length - 1])?.id ?? '';
+	});
+
+	function goNow() {
+		document
+			.getElementById(`m-${nowId}`)
+			?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
 
 	// Group by calendar day for readable scanning.
 	let days = $derived(
@@ -69,9 +86,15 @@
 	{#each days as [day, ms] (day)}
 		<h3 class="day">{day}</h3>
 		{#each ms as m (m.id)}
-			<TipCard match={m} />
+			<div id={`m-${m.id}`} class="anchor"><TipCard match={m} /></div>
 		{/each}
 	{/each}
+{/if}
+
+{#if tipsStore.loaded && nowId}
+	<button class="fab" onclick={goNow} aria-label="Scroll to the next match">
+		<LocateFixed size={18} /> Now
+	</button>
 {/if}
 
 <style>
@@ -124,5 +147,52 @@
 		margin: 1.3rem 0 0.6rem;
 		font-size: 0.95rem;
 		color: var(--muted);
+	}
+	/* Land below the fixed top bar + collapsed sticky header. */
+	.anchor {
+		scroll-margin-top: 165px;
+	}
+	@media (min-width: 900px) {
+		.anchor {
+			scroll-margin-top: 110px;
+		}
+	}
+	.fab {
+		position: fixed;
+		right: 1rem;
+		bottom: calc(var(--nav-h) + 1rem);
+		z-index: 40;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.7rem 1rem;
+		border: none;
+		border-radius: var(--radius-pill);
+		background: var(--accent);
+		color: var(--accent-fg);
+		font:
+			800 0.8rem var(--font);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		cursor: pointer;
+		box-shadow: var(--shadow-pop);
+		transition:
+			transform 0.12s ease,
+			box-shadow 0.2s ease;
+	}
+	.fab:hover {
+		transform: translateY(-2px);
+		box-shadow: var(--glow);
+	}
+	@media (min-width: 900px) {
+		.fab {
+			bottom: 1.5rem;
+			right: 1.5rem;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.fab {
+			transition: none;
+		}
 	}
 </style>
