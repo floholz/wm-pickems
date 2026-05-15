@@ -64,6 +64,9 @@
 		const idx = nowDayIndex;
 		if (idx < 0) return;
 		didAutoScroll = true;
+		// First matchday: stay at the very top (full header). Otherwise jump
+		// to that day's header.
+		if (idx === 0) return;
 		tick().then(() =>
 			document
 				.getElementById(`day-${idx}`)
