@@ -43,6 +43,12 @@ class Auth {
 		await pb.collection('users').authWithPassword(identity, password);
 	}
 
+	// Google OAuth2 (popup flow). Creates or signs into the matching account;
+	// the avatar/name are pulled from the Google profile by the server.
+	async loginGoogle() {
+		await pb.collection('users').authWithOAuth2({ provider: 'google' });
+	}
+
 	async register(name: string, email: string, password: string) {
 		await pb.collection('users').create({
 			name,

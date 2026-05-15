@@ -17,6 +17,7 @@ import (
 	"github.com/floholz/wm-pickems/internal/dev"
 	"github.com/floholz/wm-pickems/internal/forecast"
 	"github.com/floholz/wm-pickems/internal/leagues"
+	"github.com/floholz/wm-pickems/internal/oauth"
 	"github.com/floholz/wm-pickems/internal/scoring"
 	"github.com/floholz/wm-pickems/internal/seed"
 	wmsync "github.com/floholz/wm-pickems/internal/sync"
@@ -40,6 +41,7 @@ func main() {
 		if err := seed.Run(e.App); err != nil {
 			return err
 		}
+		oauth.Register(e.App)
 		wmsync.Register(e.App, e)
 		leagues.Register(e.App, e)
 		tips.Register(e.App, e)
