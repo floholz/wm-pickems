@@ -55,7 +55,7 @@ func up0001(app core.App) error {
 	teams.ViewRule = ptr("")
 	teams.Fields.Add(&core.TextField{Name: "fifaCode", Required: true, Max: 3})
 	teams.Fields.Add(&core.TextField{Name: "name", Required: true, Max: 100})
-	teams.Fields.Add(&core.TextField{Name: "iso2", Max: 2}) // for /flags/<iso2>.svg
+	teams.Fields.Add(&core.TextField{Name: "iso2", Max: 8}) // flag-icons name, e.g. "mx" or "gb-sct"
 	teams.Fields.Add(&core.TextField{Name: "confederation", Max: 16})
 	teams.Fields.Add(&core.AutodateField{Name: "created", OnCreate: true})
 	teams.Fields.Add(&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true})

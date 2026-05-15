@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -290,10 +291,66 @@ func actualRoundTeams(app core.App) (map[string]map[string]bool, string) {
 }
 
 type fcResolver struct {
-	order   map[string][]string
-	thirds  map[string]string
-	bracket map[string]string
-	ko      map[int]*core.Record
+	order      map[string][]string
+	thirdByNum map[int]string // R32 match num -> chosen third teamId
+	bracket    map[string]string
+	ko         map[int]*core.Record
+}
+
+// assignThirds slots the user's chosen best thirds ({groupLetter: teamId})
+// into the 8 R32 third-slots: slots in match order, each filled by the
+// lowest-letter chosen third its rule allows that isn't used yet. Identical
+// to the frontend so Forecast knockout scoring agrees.
+func assignThirds(koList []*core.Record, thirds map[string]string) map[int]string {
+	type slot struct {
+		num     int
+		allowed []string
+	}
+	var slots []slot
+	for _, mt := range koList {
+		if mt.GetString("stage") != "R32" {
+			continue
+		}
+		for _, lbl := range []string{mt.GetString("homeLabel"), mt.GetString("awayLabel")} {
+			if strings.HasPrefix(lbl, "3") && strings.Contains(lbl, "/") {
+				slots = append(slots, slot{
+					num:     mt.GetInt("num"),
+					allowed: strings.Split(strings.TrimPrefix(lbl, "3"), "/"),
+				})
+			}
+		}
+	}
+	sort.Slice(slots, func(i, j int) bool { return slots[i].num < slots[j].num })
+
+	chosen := make([]string, 0, len(thirds))
+	for letter := range thirds {
+		chosen = append(chosen, letter)
+	}
+	sort.Strings(chosen)
+
+	used := map[string]bool{}
+	out := map[int]string{}
+	for _, s := range slots {
+		for _, letter := range chosen {
+			if used[letter] {
+				continue
+			}
+			ok := false
+			for _, a := range s.allowed {
+				if a == letter {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				continue
+			}
+			out[s.num] = thirds[letter]
+			used[letter] = true
+			break
+		}
+	}
+	return out
 }
 
 func (r *fcResolver) resolve(label string, forNum int, seen map[int]bool) string {
@@ -312,7 +369,7 @@ func (r *fcResolver) resolve(label string, forNum int, seen map[int]bool) string
 		}
 		return ""
 	case '3':
-		return r.thirds[strconv.Itoa(forNum)]
+		return r.thirdByNum[forNum]
 	case 'W', 'L':
 		n, _ := strconv.Atoi(label[1:])
 		if seen[n] {
@@ -399,7 +456,12 @@ func scoreForecast(app core.App, cfg Config, fc *core.Record) (fcBreakdown, int)
 			koByNum[n] = m
 		}
 	}
-	r := &fcResolver{order: order, thirds: thirds, bracket: bracket, ko: koByNum}
+	r := &fcResolver{
+		order:      order,
+		thirdByNum: assignThirds(koList, thirds),
+		bracket:    bracket,
+		ko:         koByNum,
+	}
 
 	for _, m := range koList {
 		st := m.GetString("stage")

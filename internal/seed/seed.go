@@ -49,6 +49,16 @@ var (
 	}
 )
 
+// HomeNationISO maps FIFA codes that have no ISO-3166 country (UK home
+// nations use emoji tag-sequences, not regional indicators) to the
+// flag-icons file name.
+var HomeNationISO = map[string]string{
+	"ENG": "gb-eng",
+	"SCO": "gb-sct",
+	"WAL": "gb-wls",
+	"NIR": "gb-nir",
+}
+
 // iso2FromFlag turns openfootball's "\u{1F1F2}\u{1F1FD}" regional-indicator
 // escape into the ISO-3166 alpha-2 code ("mx") used for the bundled flag SVGs.
 func iso2FromFlag(flagUnicode string) string {
@@ -186,9 +196,13 @@ func Run(app core.App) error {
 		groupTeams := map[string][]string{}
 		for _, t := range ofTeams {
 			rec := core.NewRecord(teamsCol)
+			iso2 := iso2FromFlag(t.FlagUnicode)
+			if h, ok := HomeNationISO[t.FifaCode]; ok {
+				iso2 = h
+			}
 			rec.Set("fifaCode", t.FifaCode)
 			rec.Set("name", t.Name)
-			rec.Set("iso2", iso2FromFlag(t.FlagUnicode))
+			rec.Set("iso2", iso2)
 			rec.Set("confederation", t.Confed)
 			if err := txApp.Save(rec); err != nil {
 				return fmt.Errorf("save team %s: %w", t.Name, err)

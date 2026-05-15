@@ -148,7 +148,11 @@
 			</span>
 		</div>
 		<div class="meta">
-			<span class="muted">{match.roundLabel} · {kickoff}</span>
+			<span class="muted"
+				>{match.stage === 'group'
+					? `Group ${match.groupLetter} · ${match.roundLabel}`
+					: match.roundLabel} · {kickoff}</span
+			>
 			<span class="spacer"></span>
 			{#if locked}
 				<span class="pill"><Lock size={12} /> locked</span>

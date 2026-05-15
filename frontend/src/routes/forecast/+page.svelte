@@ -121,28 +121,33 @@
 			</section>
 		{/each}
 	{:else if section === 'thirds'}
-		<p class="muted small">Pick which 3rd-placed team fills each Round-of-32 slot (from your group order).</p>
-		{#each fs.thirdSlots as slot (slot.matchNum)}
-			<section class="card">
-				<div class="row">
-					<b>Slot · groups {slot.allowed.join('/')}</b>
-				</div>
-				<select
-					class="input"
-					disabled={fs.locked}
-					value={fs.thirds[String(slot.matchNum)] ?? ''}
-					onchange={(e) =>
-						(fs.thirds[String(slot.matchNum)] = (
-							e.target as HTMLSelectElement
-						).value)}
-				>
-					<option value="">— choose —</option>
-					{#each fs.eligibleThirds(slot) as id (id)}
-						<option value={id}>{tname(id)}</option>
-					{/each}
-				</select>
-			</section>
-		{/each}
+		<div class="thead">
+			<p class="muted small">
+				8 of the 12 third-placed teams advance. Tick the eight you think
+				make it. (The 3rd of each group comes from your Groups order.)
+			</p>
+			<span class="cnt" class:full={fs.chosenThirdLetters.length === 8}>
+				{fs.chosenThirdLetters.length} / 8
+			</span>
+		</div>
+		<section class="card tlist">
+			{#each fs.groups as g (g.letter)}
+				{@const tid = fs.groupThird(g.letter)}
+				{@const on = !!fs.thirds[g.letter]}
+				<label class="trow" class:on>
+					<input
+						type="checkbox"
+						checked={on}
+						disabled={fs.locked ||
+							(!on && fs.chosenThirdLetters.length >= 8)}
+						onchange={() => fs.toggleThird(g.letter)}
+					/>
+					<span class="gl">{g.letter}</span>
+					<Flag iso2={fs.team(tid)?.iso2 ?? ''} code={fs.team(tid)?.fifaCode ?? ''} />
+					<span class="nm">{tname(tid) || '—'}</span>
+				</label>
+			{/each}
+		</section>
 	{:else}
 		{#if champion}
 			<div class="card champ">
@@ -338,5 +343,68 @@
 	.savebar .btn {
 		width: auto;
 		flex: 1;
+	}
+	.thead {
+		display: flex;
+		align-items: flex-start;
+		gap: 1rem;
+		margin-bottom: 0.6rem;
+	}
+	.thead .small {
+		flex: 1;
+	}
+	.cnt {
+		font-family: var(--font-mono);
+		font-weight: 700;
+		padding: 0.2rem 0.6rem;
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--border);
+		color: var(--muted);
+		white-space: nowrap;
+	}
+	.cnt.full {
+		color: var(--accent-fg);
+		background: var(--accent);
+		border-color: var(--accent);
+	}
+	.tlist {
+		padding: 0.3rem 0.9rem;
+	}
+	.trow {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		padding: 0.6rem 0;
+		border-top: 1px solid var(--border);
+		cursor: pointer;
+	}
+	.trow:first-child {
+		border-top: none;
+	}
+	.trow input {
+		width: 20px;
+		height: 20px;
+		accent-color: var(--accent);
+	}
+	.trow .gl {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		border-radius: 6px;
+		background: var(--surface-2);
+		font-family: var(--font-display);
+		font-size: 0.85rem;
+		color: var(--muted);
+	}
+	.trow.on {
+		color: var(--text);
+	}
+	.trow.on .gl {
+		background: var(--accent);
+		color: var(--accent-fg);
+	}
+	.trow .nm {
+		font-weight: 600;
 	}
 </style>

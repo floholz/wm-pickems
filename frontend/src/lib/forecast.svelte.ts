@@ -97,7 +97,7 @@ class ForecastStore {
 			const letter = label.slice(1);
 			return this.groupOrder[letter]?.[c === '1' ? 0 : 1] ?? '';
 		}
-		if (c === '3') return this.thirds[String(forMatchNum)] ?? '';
+		if (c === '3') return this.thirdAssignment()[forMatchNum] ?? '';
 		if (c === 'W' || c === 'L') {
 			const n = parseInt(label.slice(1), 10);
 			if (seen.has(n)) return '';
@@ -125,27 +125,58 @@ class ForecastStore {
 		this.bracket[koKey(m)] = teamId;
 	}
 
-	/** Teams ranked 3rd in their group and eligible for a given third slot,
-	 *  excluding ones already assigned to another slot. */
-	eligibleThirds(slot: ThirdSlot): string[] {
-		const used = new Set(
-			Object.entries(this.thirds)
-				.filter(([k]) => k !== String(slot.matchNum))
-				.map(([, v]) => v)
-		);
-		const out: string[] = [];
-		for (const letter of slot.allowed) {
-			const third = this.groupOrder[letter]?.[2];
-			if (third && !used.has(third)) out.push(third);
+	readonly maxThirds = 8;
+
+	/** The predicted 3rd-placed team of a group (from the current order). */
+	groupThird(letter: string): string {
+		return this.groupOrder[letter]?.[2] ?? '';
+	}
+
+	/** Letters the user ticked to advance as a best third. */
+	get chosenThirdLetters(): string[] {
+		return Object.keys(this.thirds);
+	}
+
+	toggleThird(letter: string) {
+		if (this.thirds[letter]) {
+			delete this.thirds[letter];
+			this.thirds = { ...this.thirds };
+		} else if (this.chosenThirdLetters.length < this.maxThirds) {
+			this.thirds = { ...this.thirds, [letter]: this.groupThird(letter) };
+		}
+	}
+
+	/** Deterministically slot the 8 chosen thirds into the 8 R32 third-slots:
+	 *  slots in match order, each filled by the lowest-letter chosen third its
+	 *  rule allows that isn't used yet. Mirrors the backend so Forecast
+	 *  knockout scoring agrees. */
+	thirdAssignment(): Record<number, string> {
+		const chosen = this.chosenThirdLetters.sort();
+		const used = new Set<string>();
+		const out: Record<number, string> = {};
+		for (const slot of [...this.thirdSlots].sort(
+			(a, b) => a.matchNum - b.matchNum
+		)) {
+			for (const letter of chosen) {
+				if (used.has(letter) || !slot.allowed.includes(letter)) continue;
+				out[slot.matchNum] = this.groupThird(letter);
+				used.add(letter);
+				break;
+			}
 		}
 		return out;
 	}
 
 	async save() {
+		// Persist thirds as {groupLetter: currentThirdTeamId} so the value
+		// stays correct even if the group order changed after ticking.
+		const thirdQualifiers: Record<string, string> = {};
+		for (const letter of this.chosenThirdLetters)
+			thirdQualifiers[letter] = this.groupThird(letter);
 		const data = {
 			user: auth.user?.id,
 			groupOrder: this.groupOrder,
-			thirdQualifiers: this.thirds,
+			thirdQualifiers,
 			bracket: this.bracket
 		};
 		const rec = this.recId

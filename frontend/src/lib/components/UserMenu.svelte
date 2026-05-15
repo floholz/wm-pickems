@@ -3,7 +3,10 @@
 	import Avatar from './Avatar.svelte';
 	import { LogOut, ChevronDown } from '@lucide/svelte';
 
-	let { align = 'right' as 'right' | 'left' } = $props();
+	let {
+		align = 'right' as 'right' | 'left',
+		up = false
+	}: { align?: 'right' | 'left'; up?: boolean } = $props();
 	let open = $state(false);
 	let root: HTMLElement;
 
@@ -28,7 +31,12 @@
 	</button>
 
 	{#if open}
-		<div class="panel" class:left={align === 'left'} role="menu">
+		<div
+			class="panel"
+			class:left={align === 'left'}
+			class:up
+			role="menu"
+		>
 			<div class="who">
 				<Avatar name={auth.user?.name ?? '?'} src={auth.user?.avatarUrl} size={40} />
 				<div class="meta">
@@ -78,6 +86,10 @@
 	.panel.left {
 		right: auto;
 		left: 0;
+	}
+	.panel.up {
+		top: auto;
+		bottom: calc(100% + 0.5rem);
 	}
 	.who {
 		display: flex;
