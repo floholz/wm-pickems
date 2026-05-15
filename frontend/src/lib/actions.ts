@@ -26,6 +26,11 @@ export function collapseOnScroll(
 		} else if (collapsed && y < expandAt) {
 			collapsed = false;
 			node.classList.remove('scrolled');
+			// Expanding grows the header, which would push us off the top and
+			// re-cross the threshold (jump/oscillation). We only get here
+			// within `expandAt` px of the top, so pin to 0 and let the header
+			// grow from a stable anchor.
+			window.scrollTo(0, 0);
 		}
 	};
 	const onScroll = () => {
