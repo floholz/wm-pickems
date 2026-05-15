@@ -167,12 +167,14 @@
 			>
 			<span class="spacer"></span>
 			{#if played}
-				<span class="pill done">FT</span>
-				{#if pts !== undefined}
-					<span class="pill ptag" class:ok={pts > 0}
-						>{pts > 0 ? '+' : ''}{pts} pt</span
-					>
-				{/if}
+				<span class="pill done">
+					FT
+					{#if pts !== undefined}
+						<b class="ptv" class:ok={pts > 0}
+							>{pts > 0 ? '+' : ''}{pts}&thinsp;pt</b
+						>
+					{/if}
+				</span>
 			{:else if live}
 				<span class="pill livep"><span class="dot"></span> Live</span>
 			{:else if locked}
@@ -414,15 +416,16 @@
 		margin: 0.5rem 0;
 	}
 	.pill.done {
+		gap: 0.35rem;
 		color: var(--muted);
 	}
-	.pill.ptag {
+	.pill.done .ptv {
+		font-family: var(--font-mono);
+		font-weight: 700;
 		color: var(--muted);
 	}
-	.pill.ptag.ok {
-		color: var(--accent-fg);
-		background: var(--accent);
-		border-color: var(--accent);
+	.pill.done .ptv.ok {
+		color: var(--accent);
 	}
 	.pill.livep {
 		color: var(--bg);
