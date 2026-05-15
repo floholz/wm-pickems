@@ -39,36 +39,71 @@ func canonName(s string) string {
 	return n
 }
 
-// Register wires the cron job (if an API key is set) and the HTTP endpoints.
+// pickProvider decides the live-results source: API-Football when its key can
+// actually reach WC2026 (a paid plan — free can't), otherwise the free
+// openfootball JSON. RESULTS_SOURCE=apifootball|openfootball forces it.
+// Returns a label and a sync function (nil = none / manual-only).
+func pickProvider(app core.App) (string, func(context.Context) error) {
+	key := os.Getenv("API_FOOTBALL_KEY")
+	mode := os.Getenv("RESULTS_SOURCE")
+
+	apiFn := func(ctx context.Context) error {
+		return SyncOnce(ctx, app, football.New(key))
+	}
+	ofFn := func(ctx context.Context) error {
+		return openfootballSync(ctx, app)
+	}
+
+	if mode == "openfootball" {
+		return "openfootball", ofFn
+	}
+	if mode == "apifootball" {
+		if key == "" {
+			return "", nil
+		}
+		return "api-football", apiFn
+	}
+	// auto: prefer API-Football only if the key can actually fetch 2026.
+	if key != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if fx, err := football.New(key).Fixtures(ctx); err == nil && len(fx) > 0 {
+			return "api-football", apiFn
+		}
+		log.Printf("[sync] API-Football key can't reach WC2026 (free plan?) — using openfootball")
+	}
+	return "openfootball", ofFn
+}
+
+// Register wires the live-results cron + manual override endpoints.
 // Called from the OnServe hook.
 func Register(app core.App, se *core.ServeEvent) {
-	key := os.Getenv("API_FOOTBALL_KEY")
+	source, run := pickProvider(app)
 
-	if key != "" {
-		client := football.New(key)
-		app.Cron().MustAdd("football-sync", cronExpr, func() {
+	if run != nil {
+		app.Cron().MustAdd("results-sync", cronExpr, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if err := SyncOnce(ctx, app, client); err != nil {
+			if err := run(ctx); err != nil {
 				log.Printf("[sync] %v", err)
 			}
 		})
-		log.Printf("[sync] API-Football auto-sync enabled (%s)", cronExpr)
+		log.Printf("[sync] auto-sync enabled via %s (%s)", source, cronExpr)
 	} else {
-		log.Printf("[sync] API_FOOTBALL_KEY not set: auto-sync disabled, manual override only")
+		log.Printf("[sync] no results source — manual override only")
 	}
 
 	// Force a sync now (superuser).
 	se.Router.POST("/api/sync/refresh", func(e *core.RequestEvent) error {
-		if key == "" {
-			return e.JSON(400, map[string]string{"error": "API_FOOTBALL_KEY not configured"})
+		if run == nil {
+			return e.JSON(400, map[string]string{"error": "no results source configured"})
 		}
 		ctx, cancel := context.WithTimeout(e.Request.Context(), 30*time.Second)
 		defer cancel()
-		if err := SyncOnce(ctx, app, football.New(key)); err != nil {
+		if err := run(ctx); err != nil {
 			return e.JSON(500, map[string]string{"error": err.Error()})
 		}
-		return e.JSON(200, map[string]string{"status": "ok"})
+		return e.JSON(200, map[string]string{"status": "ok", "source": source})
 	}).Bind(apis.RequireSuperuserAuth())
 
 	// Manual result override (superuser). Body: ftHome,ftAway,etHome,etAway,

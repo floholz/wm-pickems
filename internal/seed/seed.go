@@ -99,13 +99,24 @@ func parseKickoff(date, tm string) (time.Time, error) {
 	return t.UTC(), nil
 }
 
-func extID(m ofMatch, stage string) string {
+// RoundStage maps an openfootball round label to our stage code.
+func RoundStage(round string) string {
+	if s, ok := roundStage[round]; ok {
+		return s
+	}
+	return "group"
+}
+
+// ExtID is the deterministic match id shared by the seed and the live-results
+// sync, so openfootball live matches map 1:1 onto our rows (no name aliases).
+func ExtID(round string, num int, group, team1, team2 string) string {
+	stage := RoundStage(round)
 	if stage == "group" {
 		return fmt.Sprintf("WC2026-G-%s-%s-%s",
-			strings.ReplaceAll(m.Group, " ", ""), slug(m.Team1), slug(m.Team2))
+			strings.ReplaceAll(group, " ", ""), slug(team1), slug(team2))
 	}
-	if m.Num > 0 {
-		return fmt.Sprintf("WC2026-K-%d", m.Num)
+	if num > 0 {
+		return fmt.Sprintf("WC2026-K-%d", num)
 	}
 	return "WC2026-K-" + stage
 }
@@ -240,7 +251,7 @@ func Run(app core.App) error {
 				return fmt.Errorf("parse kickoff %q %q: %w", m.Date, m.Time, err)
 			}
 			rec := core.NewRecord(matchesCol)
-			rec.Set("extId", extID(m, stage))
+			rec.Set("extId", ExtID(m.Round, m.Num, m.Group, m.Team1, m.Team2))
 			rec.Set("stage", stage)
 			rec.Set("num", m.Num)
 			rec.Set("roundLabel", m.Round)

@@ -13,7 +13,8 @@ cp .env.example .env
 | Var | Needed | Notes |
 |-----|--------|-------|
 | `HTTP_PORT` | no | Host port (default `8090`). |
-| `API_FOOTBALL_KEY` | optional | Free key from api-football.com. Without it, auto result-sync is **off**; the app still runs on the seeded fixtures and the manual admin override. Can be added any time (restart). |
+| `API_FOOTBALL_KEY` | optional | Only used if it's a **paid** API-Football plan (the free tier has no WC2026 access). |
+| `RESULTS_SOURCE` | no | `auto` (default): API-Football if its key reaches WC2026, else the free **openfootball** JSON. Force with `apifootball` / `openfootball`. Manual override always works. openfootball is community-updated (hours, not real-time). |
 | `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD` | optional | Convenience only — see superuser step below. |
 
 ## 2. Run
@@ -38,8 +39,9 @@ docker compose exec app wm-pickems superuser create you@example.com 'a-strong-pa
 
 ## 4. Operating
 
-- **Results**: with an API key they sync every 30 min (≤48 requests/day, well
-  under the 100/day free tier). Force one: `POST /api/sync/refresh` (superuser).
+- **Results**: synced every 30 min from the active source (openfootball by
+  default, or a paid API-Football). Force one: `POST /api/sync/refresh`
+  (superuser) — returns the source used.
 - **Manual override / fix a result**: `POST /api/admin/matches/{id}/result`
   with `{ "FTHome":2, "FTAway":1, "Status":"finished" }` (also `ETHome/ETAway`,
   `PenHome/PenAway` for knockout). Scores recompute automatically.
