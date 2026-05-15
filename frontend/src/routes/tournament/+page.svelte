@@ -2,6 +2,8 @@
 	import { tipsStore, type Match } from '$lib/tips.svelte';
 	import Flag from '$lib/components/Flag.svelte';
 	import { collapseOnScroll } from '$lib/actions';
+	import { serverClock } from '$lib/serverclock.svelte';
+	import { LocateFixed } from '@lucide/svelte';
 
 	let view = $state<'groups' | 'bracket'>('groups');
 
@@ -104,6 +106,27 @@
 		}))
 	);
 
+	// Current knockout stage = stage of the next KO match not yet started
+	// (or the last stage once it's all done).
+	let currentStage = $derived.by(() => {
+		const now = serverClock.now();
+		const ko = tipsStore.matches
+			.filter((m) => m.stage !== 'group')
+			.sort(
+				(a, b) =>
+					new Date(a.kickoff).getTime() -
+					new Date(b.kickoff).getTime()
+			);
+		const next = ko.find((m) => new Date(m.kickoff).getTime() >= now);
+		return next?.stage ?? ko[ko.length - 1]?.stage ?? '';
+	});
+
+	function goNow() {
+		document
+			.getElementById(`st-${currentStage}`)
+			?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
 	function tn(id: string) {
 		return tipsStore.team(id);
 	}
@@ -163,7 +186,7 @@
 {:else}
 	<div class="stagger">
 		{#each bracket as col (col.stage)}
-			<h3 class="rname">{stageName[col.stage]}</h3>
+			<h3 class="rname" id={`st-${col.stage}`}>{stageName[col.stage]}</h3>
 			{#each col.matches as m (m.id)}
 				{@const H = tn(m.homeTeam)}
 				{@const A = tn(m.awayTeam)}
@@ -183,7 +206,14 @@
 				</div>
 			{/each}
 		{/each}
+		<div class="fabpad"></div>
 	</div>
+{/if}
+
+{#if tipsStore.loaded && view === 'bracket' && currentStage}
+	<button class="fab" onclick={goNow} aria-label="Jump to the current round">
+		<LocateFixed size={18} /> Now
+	</button>
 {/if}
 
 <style>
@@ -292,6 +322,53 @@
 		letter-spacing: 0.04em;
 		color: var(--muted);
 		margin: 1.4rem 0 0.6rem;
+		scroll-margin-top: 150px;
+	}
+	@media (min-width: 900px) {
+		.rname {
+			scroll-margin-top: 96px;
+		}
+	}
+	.fabpad {
+		height: 4rem;
+	}
+	.fab {
+		position: fixed;
+		right: 1rem;
+		bottom: calc(var(--nav-h) + 1rem);
+		z-index: 40;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.7rem 1rem;
+		border: none;
+		border-radius: var(--radius-pill);
+		background: var(--accent);
+		color: var(--accent-fg);
+		font:
+			800 0.8rem var(--font);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		cursor: pointer;
+		box-shadow: var(--shadow-pop);
+		transition:
+			transform 0.12s ease,
+			box-shadow 0.2s ease;
+	}
+	.fab:hover {
+		transform: translateY(-2px);
+		box-shadow: var(--glow);
+	}
+	@media (min-width: 900px) {
+		.fab {
+			bottom: 1.5rem;
+			right: 1.5rem;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.fab {
+			transition: none;
+		}
 	}
 	.bm {
 		display: flex;

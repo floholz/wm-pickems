@@ -105,6 +105,7 @@
 			<div class="match"><TipCard match={m} /></div>
 		{/each}
 	{/each}
+	<div class="fabpad"></div>
 {/if}
 
 {#if tipsStore.loaded && nowId}
@@ -173,6 +174,9 @@
 	}
 	.match + .match {
 		margin-top: 6px;
+	}
+	.fabpad {
+		height: 4rem;
 	}
 	.fab {
 		position: fixed;
