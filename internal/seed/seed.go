@@ -119,22 +119,22 @@ func slug(s string) string {
 	}, s)
 }
 
-// defaultScoringConfig matches the agreed rules (see scoring-rules notes). All
-// weights live here so they can be tuned without code changes; per-League
-// overrides reference a different scoring_configs record.
-const defaultScoringConfig = `{
+// DefaultScoringConfig — the agreed rules; tunable without code changes
+// (per-League overrides reference a different scoring_configs record).
+// Max 6 per game (group 1/X/2, KO = who advances; no separate advancer / ET
+// bonus). Forecast: exact group position (+ perfect bonus), +advance per
+// correctly-predicted advancer, escalating KO rounds.
+const DefaultScoringConfig = `{
   "match": {
     "tendency": 3,
     "exact": 1,
     "totalGoals": 1,
-    "goalDiff": 1,
-    "koOtBonus": true,
-    "advancer": 2
+    "goalDiff": 1
   },
   "forecast": {
     "groupPosition": 1,
     "perfectGroupBonus": 2,
-    "thirdQualifier": 2,
+    "advance": 1,
     "round": { "R32": 1, "R16": 2, "QF": 3, "SF": 5, "FINAL": 8, "CHAMPION": 13 }
   },
   "tiebreakers": ["points", "exactScores", "correctWinners", "goalDiffDeviation", "earliestEdit"]
@@ -152,7 +152,7 @@ func ensureDefaultScoringConfig(app core.App) error {
 	rec := core.NewRecord(col)
 	rec.Set("name", "Default")
 	rec.Set("isDefault", true)
-	rec.Set("config", defaultScoringConfig)
+	rec.Set("config", DefaultScoringConfig)
 	return app.Save(rec)
 }
 

@@ -20,24 +20,26 @@ import (
 
 type Config struct {
 	Match struct {
-		Tendency   int  `json:"tendency"`
-		Exact      int  `json:"exact"`
-		TotalGoals int  `json:"totalGoals"`
-		GoalDiff   int  `json:"goalDiff"`
-		KoOtBonus  bool `json:"koOtBonus"`
-		Advancer   int  `json:"advancer"`
+		Tendency   int `json:"tendency"`   // correct result (group 1/X/2; KO = who advances)
+		Exact      int `json:"exact"`      // exact reference score
+		TotalGoals int `json:"totalGoals"` // correct total goals
+		GoalDiff   int `json:"goalDiff"`   // correct goal difference
 	} `json:"match"`
 	Forecast struct {
-		GroupPosition     int            `json:"groupPosition"`
-		PerfectGroupBonus int            `json:"perfectGroupBonus"`
-		ThirdQualifier    int            `json:"thirdQualifier"`
-		Round             map[string]int `json:"round"`
+		GroupPosition     int            `json:"groupPosition"`     // per exact final position
+		PerfectGroupBonus int            `json:"perfectGroupBonus"` // whole group perfect
+		Advance           int            `json:"advance"`           // per predicted advancer that advances
+		Round             map[string]int `json:"round"`             // predicted team reaching a KO round
 	} `json:"forecast"`
 }
 
 func loadConfig(rec *core.Record) Config {
 	var c Config
 	_ = json.Unmarshal([]byte(rec.GetString("config")), &c)
+	// Backward-compat default for configs predating the "advance" rule.
+	if c.Forecast.Advance == 0 {
+		c.Forecast.Advance = 1
+	}
 	return c
 }
 
@@ -79,17 +81,16 @@ func sign(n int) int {
 // ---- Match (Tip) scoring ----
 
 type tipComponents struct {
-	Tendency   int `json:"tendency"`
+	Tendency   int `json:"tendency"` // correct result / who advances
 	Exact      int `json:"exact"`
 	TotalGoals int `json:"totalGoals"`
 	GoalDiff   int `json:"goalDiff"`
-	OtBonus    int `json:"otBonus"`
-	Advancer   int `json:"advancer"`
 	GdDev      int `json:"gdDev"` // |predicted GD - actual GD| (tiebreaker only)
 }
 
+// points — max 6 per game (3 + 1 + 1 + 1).
 func (c tipComponents) points() int {
-	return c.Tendency + c.Exact + c.TotalGoals + c.GoalDiff + c.OtBonus + c.Advancer
+	return c.Tendency + c.Exact + c.TotalGoals + c.GoalDiff
 }
 
 // MatchResult / TipPrediction are the plain inputs to the pure scorer, so the
@@ -106,48 +107,50 @@ type TipPrediction struct {
 	Advancer string
 }
 
-// scoreValues is the pure scoring core (see scoring_test.go).
+// scoreValues is the pure scoring core (see scoring_test.go). Max 6 per game:
+//   - "correct result" (Tendency): group = 1/X/2 on 90'; knockout = the team
+//     that advances (no draw outcome).
+//   - exact / total goals / goal difference (1 each) compare the reference
+//     score: 90' for group and KO decided in 90'; the after-extra-time score
+//     when a KO goes to extra time (using the user's ET prediction if they
+//     predicted a 90' draw, else their decisive 90' prediction).
 func scoreValues(cfg Config, m MatchResult, p TipPrediction) tipComponents {
 	var r tipComponents
-	if sign(p.FtH-p.FtA) == sign(m.FtH-m.FtA) {
-		r.Tendency = cfg.Match.Tendency
-	}
-	if p.FtH == m.FtH && p.FtA == m.FtA {
-		r.Exact = cfg.Match.Exact
-	}
-	if p.FtH+p.FtA == m.FtH+m.FtA {
-		r.TotalGoals = cfg.Match.TotalGoals
-	}
-	if p.FtH-p.FtA == m.FtH-m.FtA {
-		r.GoalDiff = cfg.Match.GoalDiff
-	}
-	if d := (p.FtH - p.FtA) - (m.FtH - m.FtA); d < 0 {
-		r.GdDev = -d
-	} else {
-		r.GdDev = d
-	}
 
-	if m.Stage == "group" {
-		return r
-	}
-
-	// Knockout: ET bonus only if the game went to ET (drawn at 90') and the
-	// user also predicted a 90' draw.
-	if cfg.Match.KoOtBonus && m.FtH == m.FtA && p.FtH == p.FtA {
-		if m.EtH != 0 || m.EtA != 0 {
-			if p.EtH == m.EtH && p.EtA == m.EtA {
-				r.OtBonus += cfg.Match.Exact
-			}
-			if p.EtH+p.EtA == m.EtH+m.EtA {
-				r.OtBonus += cfg.Match.TotalGoals
-			}
-			if p.EtH-p.EtA == m.EtH-m.EtA {
-				r.OtBonus += cfg.Match.GoalDiff
+	// Reference scores for the accuracy components.
+	aH, aA := m.FtH, m.FtA
+	pH, pA := p.FtH, p.FtA
+	if m.Stage != "group" {
+		wentET := m.EtH != 0 || m.EtA != 0
+		if wentET {
+			aH, aA = m.EtH, m.EtA
+			if p.FtH == p.FtA { // user foresaw a draw -> use their ET guess
+				pH, pA = p.EtH, p.EtA
 			}
 		}
 	}
-	if m.Advancer != "" && m.Advancer == p.Advancer {
-		r.Advancer = cfg.Match.Advancer
+
+	if m.Stage == "group" {
+		if sign(p.FtH-p.FtA) == sign(m.FtH-m.FtA) {
+			r.Tendency = cfg.Match.Tendency
+		}
+	} else if m.Advancer != "" && m.Advancer == p.Advancer {
+		r.Tendency = cfg.Match.Tendency
+	}
+
+	if pH == aH && pA == aA {
+		r.Exact = cfg.Match.Exact
+	}
+	if pH+pA == aH+aA {
+		r.TotalGoals = cfg.Match.TotalGoals
+	}
+	if pH-pA == aH-aA {
+		r.GoalDiff = cfg.Match.GoalDiff
+	}
+	if d := (pH - pA) - (aH - aA); d < 0 {
+		r.GdDev = -d
+	} else {
+		r.GdDev = d
 	}
 	return r
 }
@@ -427,13 +430,15 @@ func koStableKey(m *core.Record) string {
 }
 
 type fcBreakdown struct {
-	Groups   int `json:"groups"`
-	Thirds   int `json:"thirds"`
-	Knockout int `json:"knockout"`
+	Groups   int `json:"groups"`   // exact final positions (+ perfect bonus)
+	Advance  int `json:"advance"`  // predicted advancers that actually advanced
+	Knockout int `json:"knockout"` // predicted teams reaching KO rounds
 	Champion int `json:"champion"`
 }
 
-func (b fcBreakdown) total() int { return b.Groups + b.Thirds + b.Knockout + b.Champion }
+func (b fcBreakdown) total() int {
+	return b.Groups + b.Advance + b.Knockout + b.Champion
+}
 
 func scoreForecast(app core.App, cfg Config, fc *core.Record) (fcBreakdown, int) {
 	var b fcBreakdown
@@ -461,12 +466,34 @@ func scoreForecast(app core.App, cfg Config, fc *core.Record) (fcBreakdown, int)
 		}
 	}
 
+	// Advancement: +Advance for each predicted advancer (a group's top 2, or
+	// one of the user's best-third picks) that actually advances.
+	best := map[string]bool{}
 	if len(thirdAggs) >= 12 { // all groups done -> best-8 fixed
-		best := bestThirdSet(thirdAggs)
-		for _, tid := range thirds {
-			if best[tid] {
-				b.Thirds += cfg.Forecast.ThirdQualifier
+		best = bestThirdSet(thirdAggs)
+	}
+	actualAdv := map[string]bool{}
+	for _, actual := range actualOrder {
+		if len(actual) >= 2 {
+			actualAdv[actual[0]] = true
+			actualAdv[actual[1]] = true
+		}
+	}
+	for id := range best {
+		actualAdv[id] = true
+	}
+	for g, pred := range order {
+		if len(pred) >= 2 {
+			for _, pid := range []string{pred[0], pred[1]} {
+				if actualAdv[pid] {
+					b.Advance += cfg.Forecast.Advance
+				}
 			}
+		}
+		// 3rd-place pick only counts if the user chose this group as a best
+		// third.
+		if len(pred) >= 3 && thirds[g] != "" && actualAdv[pred[2]] {
+			b.Advance += cfg.Forecast.Advance
 		}
 	}
 

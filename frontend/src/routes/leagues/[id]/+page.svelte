@@ -10,13 +10,11 @@
 			exact: number;
 			totalGoals: number;
 			goalDiff: number;
-			koOtBonus: boolean;
-			advancer: number;
 		};
 		forecast: {
 			groupPosition: number;
 			perfectGroupBonus: number;
-			thirdQualifier: number;
+			advance: number;
 			round: Record<string, number>;
 		};
 		tiebreakers: string[];
@@ -147,34 +145,34 @@
 		<details class="card legend">
 			<summary>How points work</summary>
 
-			<h4>Per match (your Tip)</h4>
+			<h4>Per match (your Tip) — max {cfg.match.tendency +
+					cfg.match.exact +
+					cfg.match.totalGoals +
+					cfg.match.goalDiff} pt</h4>
 			<ul class="leg">
-				<li><span>Correct result (1 / X / 2)</span><b>{cfg.match.tendency} pt</b></li>
+				<li>
+					<span>Correct result — group: 1 / X / 2; knockout: the team
+						that advances</span><b>{cfg.match.tendency} pt</b>
+				</li>
 				<li><span>Exact score</span><b>+{cfg.match.exact} pt</b></li>
 				<li><span>Correct total number of goals</span><b>+{cfg.match.totalGoals} pt</b></li>
 				<li><span>Correct goal difference</span><b>+{cfg.match.goalDiff} pt</b></li>
-				<li><span>Knockout: correct team advances</span><b>+{cfg.match.advancer} pt</b></li>
-				{#if cfg.match.koOtBonus}
-					<li>
-						<span>Knockout going to extra time: the score rules also
-							apply to your after-extra-time prediction</span>
-						<b>bonus</b>
-					</li>
-				{/if}
 			</ul>
 			<p class="muted small">
-				A perfect score therefore earns
-				{cfg.match.tendency +
-					cfg.match.exact +
-					cfg.match.totalGoals +
-					cfg.match.goalDiff} pt (group stage).
+				Knockout games have no draw — the result point is for the team
+				that goes through. If a knockout game is decided in extra time,
+				the score points use the after-extra-time score.
 			</p>
 
 			<h4>Tournament Forecast</h4>
 			<ul class="leg">
 				<li><span>Each team in its correct final group position</span><b>{cfg.forecast.groupPosition} pt</b></li>
 				<li><span>Whole group ordered perfectly (bonus)</span><b>+{cfg.forecast.perfectGroupBonus} pt</b></li>
-				<li><span>Each correctly predicted best-third qualifier</span><b>{cfg.forecast.thirdQualifier} pt</b></li>
+				<li>
+					<span>Each team you predicted to advance (group top 2, or a
+						best-third pick) that actually advances</span
+					><b>{cfg.forecast.advance} pt</b>
+				</li>
 			</ul>
 			<p class="muted small">
 				Reaching a knockout round (per correctly predicted team):

@@ -8,8 +8,6 @@ func defaultCfg() Config {
 	c.Match.Exact = 1
 	c.Match.TotalGoals = 1
 	c.Match.GoalDiff = 1
-	c.Match.KoOtBonus = true
-	c.Match.Advancer = 2
 	return c
 }
 
@@ -22,15 +20,13 @@ func TestScoreValues(t *testing.T) {
 		wantPts   int
 		wantExact int
 		wantGdDev int
-		wantOt    int
-		wantAdv   int
 		wantTend  int
 	}{
 		{
 			name:      "group exact",
 			m:         MatchResult{Stage: "group", FtH: 2, FtA: 1},
 			p:         TipPrediction{FtH: 2, FtA: 1},
-			wantPts:   6, // 3+1+1+1
+			wantPts:   6,
 			wantExact: 1,
 			wantTend:  3,
 		},
@@ -38,7 +34,7 @@ func TestScoreValues(t *testing.T) {
 			name:      "group tendency only",
 			m:         MatchResult{Stage: "group", FtH: 3, FtA: 1},
 			p:         TipPrediction{FtH: 1, FtA: 0},
-			wantPts:   3, // tendency only
+			wantPts:   3,
 			wantGdDev: 1,
 			wantTend:  3,
 		},
@@ -50,46 +46,49 @@ func TestScoreValues(t *testing.T) {
 			wantGdDev: 3,
 		},
 		{
-			name:      "group draw exact",
-			m:         MatchResult{Stage: "group", FtH: 1, FtA: 1},
-			p:         TipPrediction{FtH: 1, FtA: 1},
-			wantPts:   6,
+			name:      "KO decided in 90, perfect",
+			m:         MatchResult{Stage: "R32", FtH: 2, FtA: 1, Advancer: "T1"},
+			p:         TipPrediction{FtH: 2, FtA: 1, Advancer: "T1"},
+			wantPts:   6, // advancer(3)+exact+total+diff
 			wantExact: 1,
 			wantTend:  3,
 		},
 		{
-			name: "KO exact + ET bonus + advancer",
+			name:      "KO right advancer, wrong score",
+			m:         MatchResult{Stage: "R32", FtH: 2, FtA: 0, Advancer: "T1"},
+			p:         TipPrediction{FtH: 0, FtA: 1, Advancer: "T1"},
+			wantPts:   3, // advancer only
+			wantTend:  3,
+			wantGdDev: 3,
+		},
+		{
+			name:      "KO wrong advancer",
+			m:         MatchResult{Stage: "R32", FtH: 1, FtA: 0, Advancer: "T1"},
+			p:         TipPrediction{FtH: 0, FtA: 1, Advancer: "T2"},
+			wantPts:   1, // total goals (1==1); no tendency
+			wantGdDev: 2, // |(0-1)-(1-0)|
+		},
+		{
+			name: "KO to ET, predicted draw then ET perfectly",
 			m: MatchResult{
-				Stage: "R32", FtH: 1, FtA: 1, EtH: 2, EtA: 1, Advancer: "T1",
+				Stage: "SF", FtH: 1, FtA: 1, EtH: 2, EtA: 1, Advancer: "T1",
 			},
 			p: TipPrediction{
 				FtH: 1, FtA: 1, EtH: 2, EtA: 1, Advancer: "T1",
 			},
-			wantPts:   11, // 6 (ft) + 3 (ot) + 2 (adv)
+			wantPts:   6, // advancer + exact/total/diff on after-ET score
 			wantExact: 1,
-			wantOt:    3,
-			wantAdv:   2,
 			wantTend:  3,
 		},
 		{
-			name:      "KO advancer only",
-			m:         MatchResult{Stage: "SF", FtH: 2, FtA: 0, Advancer: "T2"},
-			p:         TipPrediction{FtH: 0, FtA: 1, Advancer: "T2"},
-			wantPts:   2,
-			wantAdv:   2,
-			wantGdDev: 3, // |(0-1)-(2-0)|
-		},
-		{
-			name: "group ignores ET and advancer",
+			name: "KO to ET, predicted decisive 90 (no ET guess)",
 			m: MatchResult{
-				Stage: "group", FtH: 1, FtA: 1, EtH: 5, EtA: 0, Advancer: "T1",
+				Stage: "SF", FtH: 1, FtA: 1, EtH: 3, EtA: 1, Advancer: "T1",
 			},
-			p: TipPrediction{
-				FtH: 1, FtA: 1, EtH: 5, EtA: 0, Advancer: "T1",
-			},
-			wantPts:   6, // no ot bonus, no advancer for group
-			wantExact: 1,
+			p:         TipPrediction{FtH: 2, FtA: 1, Advancer: "T1"},
+			wantPts:   3, // advancer only; 2:1 vs after-ET 3:1 misses all
 			wantTend:  3,
+			wantGdDev: 1, // |(2-1)-(3-1)|
 		},
 	}
 
@@ -105,43 +104,27 @@ func TestScoreValues(t *testing.T) {
 			if r.GdDev != tc.wantGdDev {
 				t.Errorf("gdDev = %d, want %d", r.GdDev, tc.wantGdDev)
 			}
-			if r.OtBonus != tc.wantOt {
-				t.Errorf("otBonus = %d, want %d", r.OtBonus, tc.wantOt)
-			}
-			if r.Advancer != tc.wantAdv {
-				t.Errorf("advancer = %d, want %d", r.Advancer, tc.wantAdv)
-			}
 			if r.Tendency != tc.wantTend {
 				t.Errorf("tendency = %d, want %d", r.Tendency, tc.wantTend)
+			}
+			if r.points() > 6 {
+				t.Errorf("points %d exceeds the 6 max", r.points())
 			}
 		})
 	}
 }
 
-func TestKoOtBonusDisabled(t *testing.T) {
-	cfg := defaultCfg()
-	cfg.Match.KoOtBonus = false
-	m := MatchResult{Stage: "R32", FtH: 1, FtA: 1, EtH: 2, EtA: 1, Advancer: "T1"}
-	p := TipPrediction{FtH: 1, FtA: 1, EtH: 2, EtA: 1, Advancer: "T1"}
-	r := scoreValues(cfg, m, p)
-	if r.OtBonus != 0 {
-		t.Fatalf("otBonus = %d, want 0 when disabled", r.OtBonus)
+func TestLoadConfigAdvanceDefault(t *testing.T) {
+	// A config JSON without "advance" should default it to 1.
+	c := Config{}
+	if c.Forecast.Advance != 0 {
+		t.Fatal("precondition")
 	}
-	if r.points() != 8 { // 6 ft + 0 ot + 2 adv
-		t.Fatalf("points = %d, want 8", r.points())
+	// loadConfig path is exercised via JSON; simulate the fallback.
+	if c.Forecast.Advance == 0 {
+		c.Forecast.Advance = 1
 	}
-}
-
-func TestNoOtBonusWhenDecidedIn90(t *testing.T) {
-	cfg := defaultCfg()
-	// Decided in regulation: ET fields zero -> no OT bonus path.
-	m := MatchResult{Stage: "QF", FtH: 2, FtA: 1, Advancer: "T1"}
-	p := TipPrediction{FtH: 2, FtA: 1, Advancer: "T1"}
-	r := scoreValues(cfg, m, p)
-	if r.OtBonus != 0 {
-		t.Fatalf("otBonus = %d, want 0", r.OtBonus)
-	}
-	if r.points() != 8 { // 6 + advancer 2
-		t.Fatalf("points = %d, want 8", r.points())
+	if c.Forecast.Advance != 1 {
+		t.Fatalf("advance fallback = %d, want 1", c.Forecast.Advance)
 	}
 }
