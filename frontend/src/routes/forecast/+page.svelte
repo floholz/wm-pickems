@@ -5,12 +5,45 @@
 	import { collapseOnScroll } from '$lib/actions';
 
 	let section = $state<'groups' | 'thirds' | 'bracket'>('groups');
-	let busy = $state(false);
-	let saved = $state(false);
+	let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
 	let err = $state('');
 
 	$effect(() => {
 		if (!fs.loaded) fs.load().catch((e) => (err = e?.message ?? 'load failed'));
+	});
+
+	// Debounced autosave. The Forecast is a living prediction edited until
+	// lock, so changes persist automatically ~1s after the last edit.
+	let primed = false;
+	let timer: ReturnType<typeof setTimeout>;
+	$effect(() => {
+		// Track every part of the prediction.
+		const snapshot = JSON.stringify([
+			fs.groupOrder,
+			fs.thirds,
+			fs.bracket
+		]);
+		if (!fs.loaded || fs.locked) return;
+		if (!primed) {
+			primed = true; // skip the initial hydrate
+			return;
+		}
+		void snapshot;
+		clearTimeout(timer);
+		timer = setTimeout(async () => {
+			saveState = 'saving';
+			err = '';
+			try {
+				await fs.save();
+				saveState = 'saved';
+			} catch (e: unknown) {
+				saveState = 'error';
+				err =
+					(e as { message?: string })?.message ??
+					'Could not save — your changes are not stored.';
+			}
+		}, 1000);
+		return () => clearTimeout(timer);
 	});
 
 	const stages = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'];
@@ -48,20 +81,6 @@
 				})
 			: ''
 	);
-
-	async function save() {
-		err = '';
-		saved = false;
-		busy = true;
-		try {
-			await fs.save();
-			saved = true;
-		} catch (e: unknown) {
-			err = (e as { message?: string })?.message ?? 'Could not save.';
-		} finally {
-			busy = false;
-		}
-	}
 
 	function sideLabel(m: KOMatch, side: 'home' | 'away') {
 		const [h, a] = fs.sides(m);
@@ -200,12 +219,17 @@
 
 	{#if !fs.locked}
 		<div class="savebar">
-			{#if err}<span class="error">{err}</span>{/if}
-			<button class="btn" onclick={save} disabled={busy}>
-				{#if saved}<Check size={16} /> Saved{:else}{busy
-						? 'Saving…'
-						: 'Save Forecast'}{/if}
-			</button>
+			<span class="savestat" class:err={saveState === 'error'}>
+				{#if saveState === 'saving'}
+					Saving…
+				{:else if saveState === 'error'}
+					{err || 'Save failed'}
+				{:else if saveState === 'saved'}
+					<Check size={15} /> Saved · changes auto-save
+				{:else}
+					Changes auto-save
+				{/if}
+			</span>
 		</div>
 	{/if}
 {/if}
@@ -390,13 +414,30 @@
 		position: sticky;
 		bottom: calc(var(--nav-h) + 0.5rem);
 		display: flex;
-		align-items: center;
-		gap: 0.75rem;
+		justify-content: center;
 		margin-top: 1.5rem;
+		pointer-events: none;
 	}
-	.savebar .btn {
-		width: auto;
-		flex: 1;
+	.savestat {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--muted);
+		background: color-mix(in srgb, var(--bg) 80%, transparent);
+		backdrop-filter: blur(8px);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-pill);
+		padding: 0.4rem 0.85rem;
+	}
+	.savestat.err {
+		color: var(--danger);
+		border-color: var(--danger);
+		text-transform: none;
+		letter-spacing: 0;
 	}
 	.thead {
 		display: flex;
