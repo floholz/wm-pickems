@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { tipsStore, isLocked, type Match } from '$lib/tips.svelte';
+	import { tipsStore, type Match } from '$lib/tips.svelte';
 	import TipCard from '$lib/components/TipCard.svelte';
 	import { collapseOnScroll } from '$lib/actions';
 	import { serverClock } from '$lib/serverclock.svelte';
 	import { LocateFixed } from '@lucide/svelte';
+	import { tick } from 'svelte';
 
-	let tab = $state<'upcoming' | 'group' | 'ko' | 'all'>('upcoming');
+	let tab = $state<'all' | 'group' | 'ko'>('all');
 
 	$effect(() => {
 		if (!tipsStore.loaded) tipsStore.load().catch(() => {});
@@ -13,7 +14,6 @@
 
 	let filtered = $derived(
 		tipsStore.matches.filter((m) => {
-			if (tab === 'upcoming') return !isLocked(m);
 			if (tab === 'group') return m.stage === 'group';
 			if (tab === 'ko') return m.stage !== 'group';
 			return true;
@@ -56,6 +56,20 @@
 	let nowDayIndex = $derived(
 		days.findIndex(([, ms]) => ms.some((m) => m.id === nowId))
 	);
+
+	// On first load, instantly jump to the current point in the tournament.
+	let didAutoScroll = false;
+	$effect(() => {
+		if (didAutoScroll || !tipsStore.loaded) return;
+		const idx = nowDayIndex;
+		if (idx < 0) return;
+		didAutoScroll = true;
+		tick().then(() =>
+			document
+				.getElementById(`day-${idx}`)
+				?.scrollIntoView({ block: 'start' })
+		);
+	});
 </script>
 
 <div class="stickyhead" use:collapseOnScroll>
@@ -67,16 +81,12 @@
 		</div>
 	</div>
 	<div class="tabs">
-		<button class:active={tab === 'upcoming'} onclick={() => (tab = 'upcoming')}
-			>Upcoming</button
-		>
+		<button class:active={tab === 'all'} onclick={() => (tab = 'all')}>All</button>
 		<button class:active={tab === 'group'} onclick={() => (tab = 'group')}
 			>Groups</button
 		>
 		<button class:active={tab === 'ko'} onclick={() => (tab = 'ko')}
 			>Knockout</button
-		>
-		<button class:active={tab === 'all'} onclick={() => (tab = 'all')}>All</button
 		>
 	</div>
 </div>
@@ -84,11 +94,7 @@
 {#if !tipsStore.loaded}
 	<p class="muted">Loading fixtures…</p>
 {:else if filtered.length === 0}
-	<p class="muted">
-		{tab === 'upcoming'
-			? 'No upcoming matches open for tipping.'
-			: 'Nothing here.'}
-	</p>
+	<p class="muted">Nothing here.</p>
 {:else}
 	{#each days as [day, ms], i (day)}
 		<h3 class="day" id={`day-${i}`}>{day}</h3>
