@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    image: wm-pickems:latest
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8090}:8090"
+    environment:
+      - API_FOOTBALL_KEY=${API_FOOTBALL_KEY:-}
+      - PB_ADMIN_EMAIL=${PB_ADMIN_EMAIL:-}
+      - PB_ADMIN_PASSWORD=${PB_ADMIN_PASSWORD:-}
+    volumes:
+      - pb_data:/pb_data
+
+volumes:
+  pb_data:

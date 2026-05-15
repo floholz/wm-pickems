@@ -1,0 +1,57 @@
+/* Base theme — mobile-first, scales up to desktop. Design gets refined in the
+   UI-polish phase; this is the structural baseline. */
+:root {
+	--bg: #0b1020;
+	--surface: #141a30;
+	--surface-2: #1c2440;
+	--border: #2a3354;
+	--text: #e8ecf8;
+	--muted: #97a0c0;
+	--accent: #4f8cff;
+	--accent-2: #29d3a4;
+	--danger: #ff5d6c;
+	--radius: 14px;
+	--maxw: 720px;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family:
+		'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	-webkit-font-smoothing: antialiased;
+}
+
+body {
+	min-height: 100dvh;
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+button {
+	font: inherit;
+	cursor: pointer;
+}
+
+.app-shell {
+	max-width: var(--maxw);
+	margin: 0 auto;
+	padding: 1rem 1rem 5rem;
+}
+
+/* On desktop, widen the shell for tables/bracket views. */
+@media (min-width: 900px) {
+	:root {
+		--maxw: 1080px;
+	}
+}
