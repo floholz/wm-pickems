@@ -4,6 +4,7 @@
 package main
 
 import (
+	"io/fs"
 	"log"
 	"net/http"
 
@@ -45,6 +46,16 @@ func main() {
 		forecast.Register(e.App, e)
 		scoring.Register(e.App, e)
 		dev.Register(e.App, e)
+
+		// Serve the web manifest with the correct MIME so it installs as a
+		// proper PWA (apis.Static would send text/plain for .webmanifest).
+		e.Router.GET("/manifest.webmanifest", func(re *core.RequestEvent) error {
+			b, err := fs.ReadFile(web.DistFS(), "manifest.webmanifest")
+			if err != nil {
+				return apis.NewNotFoundError("", nil)
+			}
+			return re.Blob(200, "application/manifest+json", b)
+		})
 		return e.Next()
 	})
 

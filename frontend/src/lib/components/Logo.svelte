@@ -3,7 +3,7 @@
 </script>
 
 <a class="logo" href="/" aria-label="WM Tips home">
-	<img class="mark" src="/logos/fhun_logo-icon.svg" alt="" />
+	<img class="mark" src="/logos/fhun_logo.svg" alt="fhun - logo" />
 	{#if !compact}<span class="word">WM&nbsp;Tips</span>{/if}
 </a>
 
