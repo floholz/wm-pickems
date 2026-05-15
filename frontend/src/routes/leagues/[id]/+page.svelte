@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { api, type LeaderboardRow } from '$lib/api';
 	import { pb } from '$lib/pb';
+	import { auth } from '$lib/auth.svelte';
 	import { Eye, EyeOff, Copy, ChevronDown } from '@lucide/svelte';
 
 	interface Cfg {
@@ -152,7 +153,7 @@
 				{#each sorted as r, i (r.userId)}
 					{@const f = r.forecast ?? {}}
 					<tr
-						class:lead={i === 0}
+						class:lead={r.userId === auth.user?.id}
 						class="main"
 						class:open={openRow === r.userId}
 						onclick={() =>
