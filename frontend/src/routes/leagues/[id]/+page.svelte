@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { api, type LeaderboardRow } from '$lib/api';
 	import { pb } from '$lib/pb';
-	import { Eye, EyeOff, Copy } from '@lucide/svelte';
+	import { Eye, EyeOff, Copy, ChevronDown } from '@lucide/svelte';
 
 	interface Cfg {
 		match: {
@@ -53,6 +53,7 @@
 	}
 
 	let revealed = $state(false);
+	let openRow = $state<string | null>(null);
 
 	let id = $derived($page.params.id ?? '');
 	let league = $state<{ id: string; name: string } | null>(null);
@@ -124,15 +125,48 @@
 
 		<table class="lb">
 			<thead>
-				<tr><th>#</th><th>Player</th><th class="num">Pts</th></tr>
+				<tr>
+					<th>#</th>
+					<th>Player</th>
+					<th class="num ext" title="Tip points">Tips</th>
+					<th class="num ext" title="Forecast points">FC</th>
+					<th class="num ext" title="Exact scores (tiebreak 1)">Exact</th>
+					<th class="num ext" title="Correct winners (tiebreak 2)">Win</th>
+					<th class="num ext" title="Goal-diff error (tiebreak 3, lower is better)">GD&Delta;</th>
+					<th class="num">Pts</th>
+				</tr>
 			</thead>
 			<tbody>
 				{#each sorted as r, i (r.userId)}
-					<tr class:lead={i === 0}>
+					<tr
+						class:lead={i === 0}
+						class="main"
+						class:open={openRow === r.userId}
+						onclick={() =>
+							(openRow = openRow === r.userId ? null : r.userId)}
+					>
 						<td class="rank">{i + 1}</td>
-						<td>{r.name}</td>
+						<td class="player">{r.name}<ChevronDown size={14} class="rx" /></td>
+						<td class="num ext digits">{r.tipsPoints}</td>
+						<td class="num ext digits">{r.forecastPoints}</td>
+						<td class="num ext digits">{r.exactScores}</td>
+						<td class="num ext digits">{r.correctWinners}</td>
+						<td class="num ext digits">{r.gdDeviation}</td>
 						<td class="num digits">{r[tab]}</td>
 					</tr>
+					{#if openRow === r.userId}
+						<tr class="detail">
+							<td colspan="8">
+								<div class="stats">
+									<span><i>Tips</i><b>{r.tipsPoints}</b></span>
+									<span><i>Forecast</i><b>{r.forecastPoints}</b></span>
+									<span><i>Exact scores</i><b>{r.exactScores}</b></span>
+									<span><i>Correct winners</i><b>{r.correctWinners}</b></span>
+									<span><i>Goal-diff error</i><b>{r.gdDeviation}</b></span>
+								</div>
+							</td>
+						</tr>
+					{/if}
 				{/each}
 			</tbody>
 		</table>
@@ -279,6 +313,69 @@
 	tr.lead .rank {
 		color: var(--accent);
 		font-weight: 800;
+	}
+	.lb th.num,
+	.lb td.num {
+		text-align: right;
+	}
+
+	/* Extra tiebreaker columns: desktop only. */
+	.ext {
+		display: none;
+	}
+	.player {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	:global(.lb .rx) {
+		color: var(--muted);
+		transition: transform 0.15s ease;
+		margin-left: auto;
+	}
+	tr.main.open :global(.rx) {
+		transform: rotate(180deg);
+	}
+	tr.main {
+		cursor: pointer;
+	}
+	.detail td {
+		padding: 0 0.4rem 0.7rem;
+	}
+	.stats {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.4rem 1rem;
+	}
+	.stats span {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.6rem;
+		padding: 0.35rem 0;
+		border-bottom: 1px solid var(--border);
+	}
+	.stats i {
+		color: var(--muted);
+		font-style: normal;
+		font-size: 0.85rem;
+	}
+	.stats b {
+		font-family: var(--font-mono);
+	}
+
+	@media (min-width: 760px) {
+		.ext {
+			display: table-cell;
+		}
+		:global(.lb .rx) {
+			display: none;
+		}
+		tr.main {
+			cursor: default;
+		}
+		.detail {
+			display: none;
+		}
 	}
 	.note {
 		margin: 0.75rem 0 0;

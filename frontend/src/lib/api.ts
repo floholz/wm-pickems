@@ -23,6 +23,9 @@ export interface LeaderboardRow {
 	total: number;
 	tipsPoints: number;
 	forecastPoints: number;
+	exactScores: number;
+	correctWinners: number;
+	gdDeviation: number;
 }
 
 export const api = {
