@@ -1,6 +1,16 @@
 <script lang="ts">
 	import { auth } from '$lib/auth.svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+
+	// After registering, resume an invite if one was carried in the URL.
+	let invite = $derived($page.url.searchParams.get('invite'));
+	function dest() {
+		return invite ? `/join/${invite}` : '/';
+	}
+	let loginHref = $derived(
+		invite ? `/login?invite=${encodeURIComponent(invite)}` : '/login'
+	);
 
 	let name = $state('');
 	let email = $state('');
@@ -18,7 +28,7 @@
 		busy = true;
 		try {
 			await auth.register(name, email, password);
-			goto('/');
+			goto(dest());
 		} catch (err: unknown) {
 			error =
 				(err as { message?: string })?.message ??
@@ -63,7 +73,7 @@
 		{#if error}<p class="error">{error}</p>{/if}
 		<button class="btn" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
 		<p class="muted switch">
-			Already have an account? <a href="/login">Sign in</a>
+			Already have an account? <a href={loginHref}>Sign in</a>
 		</p>
 	</form>
 </div>

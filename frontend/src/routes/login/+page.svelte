@@ -1,11 +1,21 @@
 <script lang="ts">
 	import { auth } from '$lib/auth.svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 
 	let identity = $state('');
 	let password = $state('');
 	let error = $state('');
 	let busy = $state(false);
+
+	// After signing in, resume an invite if one was carried in the URL.
+	let invite = $derived($page.url.searchParams.get('invite'));
+	function dest() {
+		return invite ? `/join/${invite}` : '/';
+	}
+	let registerHref = $derived(
+		invite ? `/register?invite=${encodeURIComponent(invite)}` : '/register'
+	);
 
 	async function submit(e: Event) {
 		e.preventDefault();
@@ -13,7 +23,7 @@
 		busy = true;
 		try {
 			await auth.login(identity, password);
-			goto('/');
+			goto(dest());
 		} catch {
 			error = 'Invalid email or password.';
 		} finally {
@@ -26,7 +36,7 @@
 		busy = true;
 		try {
 			await auth.loginGoogle();
-			goto('/');
+			goto(dest());
 		} catch (e: unknown) {
 			error =
 				(e as { message?: string })?.message ?? 'Google sign-in failed.';
@@ -94,7 +104,7 @@
 			<span class="gsi-text">Continue with Google</span>
 		</button>
 		<p class="muted switch">
-			No account? <a href="/register">Create one</a>
+			No account? <a href={registerHref}>Create one</a>
 		</p>
 	</form>
 </div>

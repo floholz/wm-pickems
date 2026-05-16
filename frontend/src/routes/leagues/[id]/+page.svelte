@@ -6,6 +6,7 @@
 		Eye,
 		EyeOff,
 		Copy,
+		Share2,
 		ChevronDown,
 		Telescope
 	} from '@lucide/svelte';
@@ -77,6 +78,16 @@
 	function copyInvite() {
 		navigator.clipboard?.writeText(invite);
 	}
+
+	let linkCopied = $state(false);
+	let copyTimer: ReturnType<typeof setTimeout>;
+	function shareInvite() {
+		const url = `${window.location.origin}/join/${invite}`;
+		navigator.clipboard?.writeText(url);
+		linkCopied = true;
+		clearTimeout(copyTimer);
+		copyTimer = setTimeout(() => (linkCopied = false), 1800);
+	}
 </script>
 
 <a href="/leagues" class="muted back">← Leagues</a>
@@ -90,22 +101,28 @@
 	<h1>{league.name}</h1>
 
 	<section class="card invite">
-		<div class="ic">
-			<div class="muted small">Invite code</div>
-			<div class="code" class:masked={!revealed}>
-				{revealed ? invite : '•'.repeat(invite.length || 6)}
+		<div class="irow">
+			<div class="ic">
+				<div class="muted small">Invite code</div>
+				<div class="code" class:masked={!revealed}>
+					{revealed ? invite : '•'.repeat(invite.length || 6)}
+				</div>
 			</div>
+			<div class="spacer"></div>
+			<button
+				class="btn secondary eye"
+				aria-label={revealed ? 'Hide code' : 'Reveal code'}
+				onclick={() => (revealed = !revealed)}
+			>
+				{#if revealed}<EyeOff size={18} />{:else}<Eye size={18} />{/if}
+			</button>
+			<button class="btn secondary copy" onclick={copyInvite}>
+				<Copy size={16} /> Copy
+			</button>
 		</div>
-		<div class="spacer"></div>
-		<button
-			class="btn secondary eye"
-			aria-label={revealed ? 'Hide code' : 'Reveal code'}
-			onclick={() => (revealed = !revealed)}
-		>
-			{#if revealed}<EyeOff size={18} />{:else}<Eye size={18} />{/if}
-		</button>
-		<button class="btn secondary copy" onclick={copyInvite}>
-			<Copy size={16} /> Copy
+		<button class="btn share" onclick={shareInvite}>
+			<Share2 size={16} />
+			{linkCopied ? 'Link copied!' : 'Share invite link'}
 		</button>
 	</section>
 
@@ -280,10 +297,13 @@
 	h1 {
 		margin: 0 0 1rem;
 	}
-	.invite {
+	.irow {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+	}
+	.share {
+		margin-top: 0.85rem;
 	}
 	.ic {
 		min-width: 0;

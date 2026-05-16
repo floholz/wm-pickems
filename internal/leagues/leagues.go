@@ -33,8 +33,28 @@ func bad(e *core.RequestEvent, code int, msg string) error {
 	return e.JSON(code, map[string]string{"error": msg})
 }
 
-// Register wires the League endpoints (all require an authenticated user).
+// Register wires the League endpoints. Most require an authenticated user;
+// the invite-preview route below is intentionally public.
 func Register(app core.App, se *core.ServeEvent) {
+	// Public: resolve an invite code to a league name for the invite landing
+	// page. Possessing the code is the capability (it's an invite link); only
+	// id + name are exposed, nothing member- or score-related.
+	//
+	// Lives under /api/invite (not /api/leagues) on purpose: Go 1.22's router
+	// rejects a path-param route under /api/leagues/ as ambiguous against
+	// /api/leagues/{id}/leaderboard.
+	se.Router.GET("/api/invite/{code}", func(e *core.RequestEvent) error {
+		code := strings.ToUpper(strings.TrimSpace(e.Request.PathValue("code")))
+		league, err := app.FindFirstRecordByFilter("leagues",
+			"inviteCode = {:c}", map[string]any{"c": code})
+		if err != nil {
+			return bad(e, http.StatusNotFound, "invalid invite code")
+		}
+		return e.JSON(http.StatusOK, map[string]any{
+			"id": league.Id, "name": league.GetString("name"),
+		})
+	})
+
 	g := se.Router.Group("/api/leagues")
 	g.Bind(apis.RequireAuth())
 

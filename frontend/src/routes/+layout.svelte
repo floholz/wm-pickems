@@ -16,15 +16,26 @@
 		if (auth.isAuthed && !serverClock.loaded) serverClock.refresh();
 	});
 
-	const publicRoutes = ['/login', '/register'];
+	// Signed-out-only pages. /join/* is open to everyone (the invite landing
+	// decides what to show), so it never triggers the auth bounce.
+	const authPages = ['/login', '/register'];
 	let path = $derived($page.url.pathname);
-	let isPublic = $derived(publicRoutes.includes(path));
-	let chrome = $derived(auth.isAuthed && !isPublic);
+	let isAuthPage = $derived(authPages.includes(path));
+	let isJoin = $derived(path.startsWith('/join'));
+	// No app chrome on the standalone auth / invite screens.
+	let chrome = $derived(auth.isAuthed && !isAuthPage && !isJoin);
 
 	// SPA auth guard.
 	$effect(() => {
-		if (!auth.isAuthed && !isPublic) goto('/login', { replaceState: true });
-		if (auth.isAuthed && isPublic) goto('/', { replaceState: true });
+		const invite = $page.url.searchParams.get('invite');
+		if (!auth.isAuthed && !isAuthPage && !isJoin) {
+			goto('/login', { replaceState: true });
+		}
+		// Already signed in: skip the auth pages. If they arrived via an
+		// invite, send them to the join flow so it auto-joins.
+		if (auth.isAuthed && isAuthPage) {
+			goto(invite ? `/join/${invite}` : '/', { replaceState: true });
+		}
 	});
 </script>
 

@@ -41,6 +41,11 @@ export const api = {
 			'/api/leagues/join',
 			{ code }
 		),
+	// Public — resolves an invite code to a league name for the /join page.
+	invitePreview: (code: string) =>
+		get<{ id: string; name: string }>(
+			`/api/invite/${encodeURIComponent(code)}`
+		),
 	myLeagues: () => get<{ leagues: LeagueSummary[] }>('/api/leagues/mine'),
 	leaderboard: (id: string) =>
 		get<{
