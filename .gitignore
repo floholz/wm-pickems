@@ -22,3 +22,4 @@ frontend/build/
 
 # Editor / OS
 .DS_Store
+.directory
