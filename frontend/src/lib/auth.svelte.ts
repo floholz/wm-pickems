@@ -62,6 +62,26 @@ class Auth {
 		await pb.collection('users').authRefresh();
 	}
 
+	// Send a password reset email to the given address. PocketBase always
+	// returns true and never reveals whether the address exists, so we treat
+	// every non-thrown response as success.
+	async requestPasswordReset(email: string) {
+		await pb.collection('users').requestPasswordReset(email);
+	}
+
+	// Apply a reset token (from the emailed link) and set a new password.
+	// PocketBase invalidates the auth store on success, so callers should
+	// route the user to /login afterwards.
+	async confirmPasswordReset(
+		token: string,
+		password: string,
+		passwordConfirm: string
+	) {
+		await pb
+			.collection('users')
+			.confirmPasswordReset(token, password, passwordConfirm);
+	}
+
 	async register(name: string, email: string, password: string) {
 		await pb.collection('users').create({
 			name,

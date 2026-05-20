@@ -63,7 +63,10 @@
 			/>
 		</div>
 		<div class="field">
-			<label for="pw">Password</label>
+			<div class="lblrow">
+				<label for="pw">Password</label>
+				<a class="forgot" href="/forgot-password">Forgot password?</a>
+			</div>
 			<input
 				id="pw"
 				class="input"
@@ -126,6 +129,19 @@
 	.switch {
 		text-align: center;
 		margin: 1rem 0 0;
+	}
+	.lblrow {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+	.forgot {
+		font-size: 0.8rem;
+		color: var(--muted);
+	}
+	.forgot:hover {
+		color: var(--accent);
 	}
 	.sep {
 		display: flex;

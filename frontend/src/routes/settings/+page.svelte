@@ -13,6 +13,27 @@
 	let busy = $state(false);
 	let fileInput: HTMLInputElement;
 
+	let resetBusy = $state(false);
+	let resetSent = $state(false);
+	let resetError = $state('');
+
+	async function sendReset() {
+		if (!auth.user?.email) return;
+		resetError = '';
+		resetSent = false;
+		resetBusy = true;
+		try {
+			await auth.requestPasswordReset(auth.user.email);
+			resetSent = true;
+		} catch (err: unknown) {
+			resetError =
+				(err as { message?: string })?.message ??
+				'Could not send reset email.';
+		} finally {
+			resetBusy = false;
+		}
+	}
+
 	// Revoke the object URL when it's replaced or the page unmounts.
 	$effect(() => {
 		const url = previewUrl;
@@ -111,8 +132,29 @@
 		{#if saved}<p class="ok">Saved.</p>{/if}
 
 		<button class="btn" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
-		<p class="muted switch"><a href="/">Back</a></p>
 	</form>
+
+	<section class="card">
+		<h3>Password</h3>
+		<p class="muted small">
+			We'll email a reset link to <strong>{auth.user?.email ?? ''}</strong>.
+			Click it to choose a new password.
+		</p>
+		{#if resetError}<p class="error">{resetError}</p>{/if}
+		{#if resetSent}
+			<p class="ok">Reset email sent — check your inbox.</p>
+		{/if}
+		<button
+			type="button"
+			class="btn secondary"
+			onclick={sendReset}
+			disabled={resetBusy || resetSent}
+		>
+			{resetBusy ? 'Sending…' : resetSent ? 'Sent' : 'Send reset link'}
+		</button>
+	</section>
+
+	<p class="muted switch"><a href="/">Back</a></p>
 </div>
 
 <style>
@@ -143,6 +185,14 @@
 	.ok {
 		color: var(--success);
 		font-size: 0.9rem;
+	}
+	.small {
+		font-size: 0.85rem;
+		margin: 0.25rem 0 0.9rem;
+	}
+	h3 {
+		margin: 0 0 0.5rem;
+		font-size: 1rem;
 	}
 	.switch {
 		text-align: center;
