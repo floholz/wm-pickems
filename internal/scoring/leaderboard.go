@@ -27,7 +27,8 @@ type Row struct {
 
 // Leaderboard builds a League's standings using its scoring config and the
 // agreed tiebreakers: points → #exact → #correct winners → smaller aggregate
-// goal-difference deviation → earliest last edit.
+// goal-difference deviation → fewer tips submitted → earliest last edit.
+// Users who never submitted a tip are sorted to the bottom regardless.
 func Leaderboard(app core.App, leagueID string) (map[string]any, error) {
 	league, err := app.FindRecordById("leagues", leagueID)
 	if err != nil {
@@ -111,6 +112,10 @@ func Leaderboard(app core.App, leagueID string) (map[string]any, error) {
 
 	sort.SliceStable(rows, func(i, j int) bool {
 		a, b := rows[i], rows[j]
+		aNone, bNone := a.Predicted == 0, b.Predicted == 0
+		if aNone != bNone {
+			return !aNone
+		}
 		if a.Total != b.Total {
 			return a.Total > b.Total
 		}
@@ -122,6 +127,9 @@ func Leaderboard(app core.App, leagueID string) (map[string]any, error) {
 		}
 		if a.GdDeviation != b.GdDeviation {
 			return a.GdDeviation < b.GdDeviation
+		}
+		if a.Predicted != b.Predicted {
+			return a.Predicted < b.Predicted
 		}
 		return a.lastEdit < b.lastEdit
 	})

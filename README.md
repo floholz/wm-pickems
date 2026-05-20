@@ -16,13 +16,19 @@ API and the embedded SvelteKit app).
   the 8 best-third qualifiers, and the whole knockout bracket. Locks at the
   first kickoff; correctness is shown per stage as results come in
   (exact / advanced-but-wrong-slot / missed).
-- **Leagues** — private competitions you join via invite code. Combined
-  leaderboard plus separate **Overall / Tips / Forecast** views, with the
-  tiebreaker stats exposed and a built-in scoring legend. Your own row is
-  highlighted.
+- **Leagues** — private competitions you join via invite code or a
+  shareable `/join/<code>` link (with public preview + auth resume).
+  Combined leaderboard plus separate **Overall / Tips / Forecast** views,
+  with the tiebreaker stats exposed and a built-in scoring legend. Your
+  own row is highlighted. Every user is auto-joined to a shared **Global**
+  league.
 - **Live tournament view** — group tables and a knockout bracket that fill
   in from real results.
-- **PWA** — installable, offline app shell, maskable icons + screenshots.
+- **Accounts** — email/password with **password reset** (forgot-password +
+  in-app confirm route), **Google sign-in** (OAuth2, configured from env),
+  and a **settings page** to edit display name and avatar.
+- **PWA** — installable (topbar button + first-visit banner on mobile),
+  offline app shell, maskable icons + screenshots.
 - **Results** — auto-synced from API-Football (free tier) when a key is set;
   always overridable by an admin; fully playable on the seeded fixtures
   without any key.
@@ -45,7 +51,8 @@ that actually advances; escalating knockout reach per predicted team —
 R32 `1` / R16 `2` / QF `3` / SF `5` / Final `8` / Champion `13`.
 
 **Tiebreakers:** points → most exact scores → most correct winners → smaller
-goal-difference error → earliest submission.
+goal-difference error → fewer tips submitted → earliest submission. Users
+who never submitted a tip are sorted to the bottom regardless.
 
 Every weight lives in the `scoring_configs` "Default" record (per-League
 overrides supported) and can be changed without a redeploy — the in-app
@@ -72,6 +79,8 @@ internal/
   forecast/             forecast validation + structure endpoint
   scoring/              pure scoring core, recompute, leaderboard (+ tests)
   leagues/              create / join / leaderboard endpoints
+  bracket/              FIFA Annex C best-third → R32 allocation table
+  oauth/                Google sign-in wiring from env (idempotent)
   clock/                overridable "now" (dev virtual clock)
   dev/                  WMP_DEV-only simulator + bot generator
   web/                  go:embed of the built SPA
@@ -136,10 +145,9 @@ The dev endpoints are **not registered** unless `WMP_DEV=1`.
 
 ## Roadmap / known follow-ups
 
-See [PLAN.md](PLAN.md) for the original design. Open items: Google OAuth
-(UI/avatar already prepared), the official FIFA best-third → R32 allocation
-table (a deterministic approximation is used for live auto-resolution), and
-exposing friends' Forecast detail after lock.
+See [PLAN.md](PLAN.md) for the original design. No major open items at the
+moment — Google OAuth, the official FIFA Annex C best-third → R32 table,
+and viewing friends' Forecast detail after lock have all shipped.
 
 ## License
 
