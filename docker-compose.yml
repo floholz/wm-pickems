@@ -1,6 +1,7 @@
 services:
   app:
     build: .
+    container_name: fhun_tips
     image: wm-pickems:latest
     restart: unless-stopped
     ports:
