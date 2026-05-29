@@ -1,0 +1,29 @@
+# Example: one container per bot. Copy to docker-compose.yml, create a per-bot
+# env file (see .env.example), and `docker compose up -d`.
+#
+# The image is built once (by the first service) and reused by the rest — each
+# bot is just the same image with its own env file (different BOT_EMAIL /
+# CLAUDE_MODEL / etc.).
+
+services:
+  claude:
+    build: .
+    image: wm-pickems-bot:latest
+    container_name: wmp_bot_claude
+    restart: unless-stopped
+    env_file: claude.env # BOT_EMAIL, BOT_PASSWORD, ANTHROPIC_API_KEY, WMP_BASE_URL, ...
+    # If the app runs in its own compose project on a shared Docker network,
+    # set WMP_BASE_URL=http://<app-container>:8090 in the env file and attach:
+    # networks: [wmpickems]
+
+  # Add more bots later — same image, different env file:
+  # chatgpt:
+  #   image: wm-pickems-bot:latest
+  #   container_name: wmp_bot_chatgpt
+  #   restart: unless-stopped
+  #   env_file: chatgpt.env
+  #   depends_on: [claude]   # ensures the image is built first
+
+# networks:
+#   wmpickems:
+#     external: true

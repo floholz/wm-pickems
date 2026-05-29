@@ -1,0 +1,9 @@
+# Keep the build context lean and free of secrets/artifacts.
+/bots
+/wmbot
+*.exe
+.env
+*.env
+!.env.example
+README.md
+docker-compose*.yml

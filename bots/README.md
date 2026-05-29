@@ -38,9 +38,26 @@ go build -o wmbot .
 ./wmbot
 ```
 
+## Docker
+
+One image, **one container per bot** — the same image runs every bot; each container just gets its own env (different `BOT_EMAIL` / `CLAUDE_MODEL` / …). The container defaults to `--loop` so it runs continuously.
+
+```sh
+# Build (context is this bots/ directory — separate module from the app)
+docker build -t wm-pickems-bot:latest .
+
+# Run one bot, continuously
+docker run -d --name wmp_bot_claude --restart unless-stopped \
+  --env-file claude.env wm-pickems-bot:latest
+```
+
+`claude.env` holds the same variables as `.env.example`. For a second bot later, run another container with its own env file off the same image.
+
+A Compose starting point is in `docker-compose.example.yml` (copy to `docker-compose.yml`, add a per-bot env file, `docker compose up -d`). If the app runs in its own Compose project, put the bot(s) on a shared Docker network and point `WMP_BASE_URL` at the app's container name.
+
 ## Configuration
 
-See `.env.example`. Defaults: `WMP_BASE_URL=http://127.0.0.1:8090`, `CLAUDE_MODEL=claude-opus-4-8`.
+See `.env.example`. Defaults: `WMP_BASE_URL=http://127.0.0.1:8090`, `CLAUDE_MODEL=claude-opus-4-8`. The container additionally defaults its command to `--loop --interval=1h`.
 
 ## Tests
 
