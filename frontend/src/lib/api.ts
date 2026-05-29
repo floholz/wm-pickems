@@ -21,6 +21,7 @@ export interface LeagueSummary {
 export interface LeaderboardRow {
 	userId: string;
 	name: string;
+	role?: string; // "member" | "admin" | "bot" (empty/absent => member)
 	total: number;
 	tipsPoints: number;
 	forecastPoints: number;

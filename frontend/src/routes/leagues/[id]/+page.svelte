@@ -14,7 +14,8 @@
 		X,
 		Lock,
 		RefreshCw,
-		UserMinus
+		UserMinus,
+		Bot
 	} from '@lucide/svelte';
 
 	interface Cfg {
@@ -350,6 +351,9 @@
 						<td class="player">
 							<div class="pwrap">
 								<span class="pname">{r.name}</span>
+								{#if r.role === 'bot'}
+									<span class="botpill" title="Bot player"><Bot size={11} /> Bot</span>
+								{/if}
 								<a
 									class="fclink"
 									href={`/forecast/${r.userId}`}
@@ -690,6 +694,17 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.botpill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		flex: none;
+		padding: 0.05rem 0.4rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		font-size: 0.7rem;
+		color: var(--muted);
 	}
 	.fclink {
 		display: inline-grid;

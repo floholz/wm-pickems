@@ -8,6 +8,7 @@ class Auth {
 		name: string;
 		email: string;
 		avatarUrl: string | null;
+		role: string; // "member" | "admin" | "bot" (empty => member)
 	} | null>(null);
 
 	constructor() {
@@ -31,12 +32,20 @@ class Auth {
 			id: r.id,
 			name: (r.name as string) || r.email,
 			email: r.email,
-			avatarUrl
+			avatarUrl,
+			role: (r.role as string) || 'member'
 		};
 	}
 
 	get isAuthed() {
 		return this.user !== null;
+	}
+
+	// App-level admin (role=admin), the trust boundary for future admin-only
+	// UI. Distinct from a PocketBase superuser. The server enforces the marker;
+	// this is only for showing/hiding admin affordances.
+	get isAdmin() {
+		return this.user?.role === 'admin';
 	}
 
 	async login(identity: string, password: string) {
