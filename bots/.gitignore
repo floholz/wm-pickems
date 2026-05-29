@@ -1,0 +1,7 @@
+# Compiled binaries
+/bots
+/wmbot
+*.exe
+
+# Local secrets
+.env
