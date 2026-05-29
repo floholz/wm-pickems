@@ -161,9 +161,14 @@ type pickWinners func(ctx context.Context, stageLabel string, ms []matchup) (map
 // the predicted group order + thirds + winners-so-far, asks the picker who
 // advances, and records the winner. Returns {matchNum: winnerTeamId}.
 func BuildForecast(ctx context.Context, s *Structure, order map[string][]string, thirds map[string]string, name func(id string) string, pick pickWinners) (map[string]string, error) {
+	// Only matches with a real number are referenced by W/L labels (R32..SF);
+	// the 3rd-place match and final carry num=0 in the data, so keying ko by
+	// num would collide them — keep just the numbered ones here.
 	ko := map[int]koMatch{}
 	for _, m := range s.Knockout {
-		ko[m.Num] = koMatch{num: m.Num, stage: m.Stage, homeLabel: m.HomeLabel, awayLabel: m.AwayLabel}
+		if m.Num > 0 {
+			ko[m.Num] = koMatch{num: m.Num, stage: m.Stage, homeLabel: m.HomeLabel, awayLabel: m.AwayLabel}
+		}
 	}
 	r := &resolver{
 		order:      order,
@@ -174,27 +179,28 @@ func BuildForecast(ctx context.Context, s *Structure, order map[string][]string,
 
 	for _, stage := range stageOrder {
 		// All matches in this stage, in match-number order.
-		nums := []int{}
+		entries := make([]koMatch, 0)
 		for _, m := range s.Knockout {
 			if m.Stage == stage {
-				nums = append(nums, m.Num)
+				entries = append(entries, koMatch{num: m.Num, stage: m.Stage, homeLabel: m.HomeLabel, awayLabel: m.AwayLabel})
 			}
 		}
-		sort.Ints(nums)
+		sort.SliceStable(entries, func(i, j int) bool { return entries[i].num < entries[j].num })
 
 		var ms []matchup
-		for _, num := range nums {
-			km := ko[num]
-			h := r.resolve(km.homeLabel, num, map[int]bool{})
-			a := r.resolve(km.awayLabel, num, map[int]bool{})
+		keyByNum := map[int]string{} // matchup.Num -> bracket key to store the winner under
+		for _, e := range entries {
+			h := r.resolve(e.homeLabel, e.num, map[int]bool{})
+			a := r.resolve(e.awayLabel, e.num, map[int]bool{})
 			if h == "" || a == "" {
 				continue // unresolved — leave this match unpicked
 			}
 			ms = append(ms, matchup{
-				Num:  num,
+				Num:  e.num,
 				Home: nameID{ID: h, Name: name(h)},
 				Away: nameID{ID: a, Name: name(a)},
 			})
+			keyByNum[e.num] = stableKey(e.num, e.stage)
 		}
 		if len(ms) == 0 {
 			continue
@@ -204,8 +210,21 @@ func BuildForecast(ctx context.Context, s *Structure, order map[string][]string,
 			return nil, err
 		}
 		for num, winner := range winners {
-			r.bracket[strconv.Itoa(num)] = winner
+			if key, ok := keyByNum[num]; ok {
+				r.bracket[key] = winner
+			}
 		}
 	}
 	return r.bracket, nil
+}
+
+// stableKey is the bracket map key for a knockout match — the same convention
+// the server's scoring engine uses (koStableKey): the match number when it has
+// one, otherwise the stage name. The 3rd-place match and final have no number,
+// so they're keyed "3RD" and "FINAL".
+func stableKey(num int, stage string) string {
+	if num > 0 {
+		return strconv.Itoa(num)
+	}
+	return stage
 }

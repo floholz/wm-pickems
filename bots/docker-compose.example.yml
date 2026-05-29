@@ -6,23 +6,24 @@
 # CLAUDE_MODEL / etc.).
 
 services:
-  claude:
-    build: .
-    image: wm-pickems/bot:latest
-    container_name: wmp_bot_claude
-    restart: unless-stopped
-    env_file: claude.env # BOT_EMAIL, BOT_PASSWORD, ANTHROPIC_API_KEY, WMP_BASE_URL, ...
-    # If the app runs in its own compose project on a shared Docker network,
-    # set WMP_BASE_URL=http://<app-container>:8090 in the env file and attach:
-    # networks: [wmpickems]
+#  claude:
+#    build: .
+#    image: wm-pickems/bot:latest
+#    container_name: wmp_bot_claude
+#    restart: unless-stopped
+#    env_file: claude.env # BOT_EMAIL, BOT_PASSWORD, ANTHROPIC_API_KEY, WMP_BASE_URL, ...
+#    # If the app runs in its own compose project on a shared Docker network,
+#    # set WMP_BASE_URL=http://<app-container>:8090 in the env file and attach:
+#    # networks: [wmpickems]
 
   # The algorithmic bot — same image, BOT_KIND=algo, no API key needed.
   algo:
+    build: .
     image: wm-pickems/bot:latest
     container_name: wmp_bot_algo
     restart: unless-stopped
     env_file: algo.env # BOT_EMAIL, BOT_PASSWORD, BOT_KIND=algo, WMP_BASE_URL, ...
-    depends_on: [claude] # ensures the image is built first
+    networks: [wmpickems]
 
   # Add more bots later — same image, different env file:
   # chatgpt:
@@ -32,6 +33,6 @@ services:
   #   env_file: chatgpt.env
   #   depends_on: [claude]
 
-# networks:
-#   wmpickems:
-#     external: true
+networks:
+  wmpickems:
+    external: true

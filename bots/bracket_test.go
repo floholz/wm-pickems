@@ -26,8 +26,10 @@ func TestBuildForecastConsistency(t *testing.T) {
 		}{
 			{Num: 1, Stage: "R32", HomeLabel: "1A", AwayLabel: "2B"},
 			{Num: 2, Stage: "R32", HomeLabel: "1B", AwayLabel: "2A"},
-			{Num: 3, Stage: "3RD", HomeLabel: "L1", AwayLabel: "L2"},
-			{Num: 4, Stage: "FINAL", HomeLabel: "W1", AwayLabel: "W2"},
+			// The 3rd-place match and final carry no number in the real data
+			// (num=0) — they must be keyed by stage, not "0".
+			{Num: 0, Stage: "3RD", HomeLabel: "L1", AwayLabel: "L2"},
+			{Num: 0, Stage: "FINAL", HomeLabel: "W1", AwayLabel: "W2"},
 		},
 	}
 
@@ -58,13 +60,14 @@ func TestBuildForecastConsistency(t *testing.T) {
 	if bracket["2"] != "b1" {
 		t.Errorf("match 2 winner = %q, want b1", bracket["2"])
 	}
-	// 3RD: losers were b2 (match1: a1 vs b2) and a2 (match2: b1 vs a2); home (b2) advances.
-	if bracket["3"] != "b2" {
-		t.Errorf("third-place winner = %q, want b2 (loser of match 1)", bracket["3"])
+	// 3RD: losers were b2 (match1: a1 vs b2) and a2 (match2: b1 vs a2); home (b2)
+	// advances. Keyed by stage because the match has no number.
+	if bracket["3RD"] != "b2" {
+		t.Errorf("third-place winner = %q (key 3RD), want b2 (loser of match 1)", bracket["3RD"])
 	}
-	// FINAL: winners a1 vs b1; home (a1) advances → champion.
-	if bracket["4"] != "a1" {
-		t.Errorf("final winner = %q, want a1", bracket["4"])
+	// FINAL: winners a1 vs b1; home (a1) advances → champion. Keyed "FINAL".
+	if bracket["FINAL"] != "a1" {
+		t.Errorf("final winner = %q (key FINAL), want a1", bracket["FINAL"])
 	}
 }
 

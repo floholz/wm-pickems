@@ -101,15 +101,18 @@ func (a *AlgoBrain) PredictTips(_ context.Context, targets []tipTarget) (map[str
 }
 
 const (
-	algoBase     = 1.4   // expected goals for an evenly-matched side
-	algoStep     = 120.0 // rating points ≈ one extra/fewer goal
-	algoMaxGoals = 6
+	algoBase     = 1.3   // expected goals for an evenly-matched side
+	algoAmp      = 1.6   // max goal swing from a large rating gap (saturating)
+	algoScale    = 300.0 // rating points that produce a sizeable swing
+	algoMaxGoals = 5
 )
 
-// expectedGoals maps a rating gap to a goal tally: round(base ± gap/step),
-// clamped. Equal teams → 1, a ~120-point edge → 2 vs 0, a big gap → 3+.
+// expectedGoals maps a rating gap to a goal tally with a *saturating* curve:
+// round(base + amp·tanh(gap/scale)). tanh keeps blowouts realistic — equal
+// teams → 1, a moderate edge → 2, and even a huge gap tops out around 3 rather
+// than running away to 5-6. The opponent's tally uses the negated gap.
 func expectedGoals(forRating, oppRating int) int {
-	g := int(math.Round(algoBase + float64(forRating-oppRating)/algoStep))
+	g := int(math.Round(algoBase + algoAmp*math.Tanh(float64(forRating-oppRating)/algoScale)))
 	return max(0, min(g, algoMaxGoals))
 }
 
@@ -117,26 +120,26 @@ func expectedGoals(forRating, oppRating int) int {
 // (e.g. a late or unexpected qualifier) — a mid/low baseline.
 const defaultRating = 1500
 
-// ratings is an approximate strength table for likely WC2026 nations, keyed by
-// FIFA 3-letter code. Values are rough Elo-style numbers (stronger = higher);
-// they only need to rank teams sensibly relative to each other. Edit freely —
-// this single table is what gives the algo bot its "opinion".
+// ratings is the strength table for the seeded WC2026 field (48 teams), keyed
+// by FIFA 3-letter code. Values are rough Elo-style numbers (stronger = higher)
+// and only need to rank teams sensibly relative to each other. This single
+// table is what gives the algo bot its "opinion" — edit freely.
 var ratings = map[string]int{
-	// Top tier
-	"ARG": 2140, "FRA": 2120, "ESP": 2110, "ENG": 2080, "BRA": 2075,
-	"POR": 2050, "NED": 2030, "BEL": 2000, "GER": 2010, "CRO": 1980,
+	// Top contenders
+	"ESP": 2120, "FRA": 2100, "ARG": 2100, "ENG": 2050, "BRA": 2040,
+	"POR": 2030, "NED": 2010, "GER": 1990, "COL": 1960, "BEL": 1950,
+	"CRO": 1950, "URU": 1950,
 	// Strong
-	"ITA": 1985, "URU": 1960, "COL": 1945, "MAR": 1940, "USA": 1860,
-	"MEX": 1855, "SUI": 1900, "DEN": 1905, "JPN": 1900, "SEN": 1915,
-	"KOR": 1850, "SRB": 1880, "POL": 1860, "AUT": 1875, "ECU": 1865,
+	"MAR": 1900, "SEN": 1900, "NOR": 1900, "JPN": 1880, "SUI": 1860,
+	"ECU": 1850, "CZE": 1820, "AUT": 1820, "KOR": 1810, "TUR": 1810,
+	"CAN": 1800, "SCO": 1800, "USA": 1800,
 	// Mid
-	"UKR": 1820, "AUS": 1790, "WAL": 1800, "TUR": 1830, "CAN": 1810,
-	"NGA": 1825, "EGY": 1800, "IRN": 1815, "PER": 1780, "CHI": 1790,
-	"CIV": 1795, "TUN": 1760, "GHA": 1760, "CMR": 1790, "RSA": 1740,
+	"ALG": 1790, "IRN": 1790, "MEX": 1790, "SWE": 1780, "CIV": 1780,
+	"EGY": 1760, "AUS": 1740, "BIH": 1740, "PAR": 1730, "TUN": 1720,
+	"GHA": 1720, "UZB": 1720, "COD": 1710, "RSA": 1700,
 	// Lower
-	"QAT": 1680, "KSA": 1670, "PAN": 1670, "CRC": 1700, "JAM": 1680,
-	"PAR": 1730, "VEN": 1730, "NZL": 1600, "UZB": 1680, "IRQ": 1650,
-	"JOR": 1640, "OMA": 1610, "UAE": 1600, "BOL": 1620,
+	"PAN": 1690, "QAT": 1680, "KSA": 1670, "IRQ": 1660, "JOR": 1640,
+	"CPV": 1620, "NZL": 1600, "HAI": 1580, "CUW": 1520,
 }
 
 func ratingFor(fifaCode string) int {
