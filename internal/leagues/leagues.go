@@ -7,6 +7,7 @@ package leagues
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -38,9 +39,67 @@ func bad(e *core.RequestEvent, code int, msg string) error {
 	return e.JSON(code, map[string]string{"error": msg})
 }
 
-// uniqueCode returns a fresh 6-char invite code not currently in use (retrying
-// on the rare collision).
+// extraCodes are non-qualifier team codes we still allow in invite codes purely
+// for fun — e.g. Italy, who didn't make WC2026. They are NOT real tournament
+// teams (no group/fixtures), only flavour in the scoreline-style codes.
+var extraCodes = []string{"ITA"}
+
+// teamCodes returns the uppercase 3-letter FIFA codes used to mint
+// scoreline-style invite codes: all seeded teams plus the extraCodes flavour
+// set, de-duplicated.
+func teamCodes(app core.App) []string {
+	seen := make(map[string]bool)
+	codes := make([]string, 0, 48+len(extraCodes))
+	add := func(c string) {
+		if c = strings.ToUpper(strings.TrimSpace(c)); c != "" && !seen[c] {
+			seen[c] = true
+			codes = append(codes, c)
+		}
+	}
+	if teams, err := app.FindRecordsByFilter("teams", "id != ''", "", 0, 0); err == nil {
+		for _, t := range teams {
+			add(t.GetString("fifaCode"))
+		}
+	}
+	for _, c := range extraCodes {
+		add(c)
+	}
+	return codes
+}
+
+// newScoreCode builds a scoreline-style invite code — TEAM·digit·TEAM·digit,
+// e.g. "AUT6GER2" — from two distinct team codes and two single-digit "scores".
+// Returns "" when fewer than two team codes are available so the caller can
+// fall back to a plain random code.
+func newScoreCode(codes []string) string {
+	if len(codes) < 2 {
+		return ""
+	}
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	home := int(b[0]) % len(codes)
+	away := int(b[1]) % len(codes)
+	if away == home { // keep the two teams distinct (a match has two sides)
+		away = (away + 1) % len(codes)
+	}
+	return fmt.Sprintf("%s%d%s%d", codes[home], int(b[2])%10, codes[away], int(b[3])%10)
+}
+
+// uniqueCode returns a fresh invite code not currently in use. It prefers a
+// scoreline-style code (e.g. "AUT6GER2"); if team data is missing or the themed
+// space is somehow exhausted, it falls back to a plain random 6-char code so
+// league creation never breaks.
 func uniqueCode(app core.App) string {
+	codes := teamCodes(app)
+	for range 20 {
+		code := newScoreCode(codes)
+		if code == "" {
+			break
+		}
+		if _, err := app.FindFirstRecordByFilter("leagues", "inviteCode = {:c}", map[string]any{"c": code}); err != nil {
+			return code // not found => unique
+		}
+	}
 	var code string
 	for range 10 {
 		code = newInviteCode(6)
