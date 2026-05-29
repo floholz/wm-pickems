@@ -15,7 +15,8 @@
 		Lock,
 		RefreshCw,
 		UserMinus,
-		Bot
+		Bot,
+		ShieldCheck
 	} from '@lucide/svelte';
 
 	interface Cfg {
@@ -352,7 +353,9 @@
 							<div class="pwrap">
 								<span class="pname">{r.name}</span>
 								{#if r.role === 'bot'}
-									<span class="botpill" title="Bot player"><Bot size={11} /> Bot</span>
+									<span class="rolepill" title="Bot player"><Bot size={11} /> Bot</span>
+								{:else if r.role === 'admin'}
+									<span class="rolepill admin" title="Admin"><ShieldCheck size={11} /> Admin</span>
 								{/if}
 								<a
 									class="fclink"
@@ -695,7 +698,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.botpill {
+	.rolepill {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.2rem;
@@ -705,6 +708,10 @@
 		border-radius: 999px;
 		font-size: 0.7rem;
 		color: var(--muted);
+	}
+	.rolepill.admin {
+		color: var(--accent);
+		border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
 	}
 	.fclink {
 		display: inline-grid;
