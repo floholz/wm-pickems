@@ -77,6 +77,7 @@
 		{#each leagues as l (l.id)}
 			<a class="lrow" href={`/leagues/${l.id}`}>
 				<span>{l.name}</span>
+				{#if l.role === 'owner'}<span class="pill">owner</span>{/if}
 				<span class="spacer"></span>
 				<span class="cnt"><Users size={15} /> {l.members}</span>
 			</a>
