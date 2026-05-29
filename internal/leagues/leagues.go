@@ -38,6 +38,33 @@ func bad(e *core.RequestEvent, code int, msg string) error {
 	return e.JSON(code, map[string]string{"error": msg})
 }
 
+// uniqueCode returns a fresh 6-char invite code not currently in use (retrying
+// on the rare collision).
+func uniqueCode(app core.App) string {
+	var code string
+	for range 10 {
+		code = newInviteCode(6)
+		if _, err := app.FindFirstRecordByFilter("leagues", "inviteCode = {:c}", map[string]any{"c": code}); err != nil {
+			break
+		}
+	}
+	return code
+}
+
+// ownedLeague loads the league and authorizes the caller as its owner. It
+// returns a 403 for non-owners — which also covers the auto-managed "Global"
+// league, whose owner is empty and therefore matches no authenticated user.
+func ownedLeague(app core.App, e *core.RequestEvent, id string) (*core.Record, error) {
+	lg, err := app.FindRecordById("leagues", id)
+	if err != nil {
+		return nil, bad(e, http.StatusNotFound, "league not found")
+	}
+	if lg.GetString("owner") != e.Auth.Id {
+		return nil, bad(e, http.StatusForbidden, "only the league owner can do this")
+	}
+	return lg, nil
+}
+
 // Register wires the League endpoints. Most require an authenticated user;
 // the invite-preview route below is intentionally public.
 func Register(app core.App, se *core.ServeEvent) {
@@ -93,14 +120,7 @@ func Register(app core.App, se *core.ServeEvent) {
 			return err
 		}
 
-		// Unique invite code (retry on the rare collision).
-		var code string
-		for range 10 {
-			code = newInviteCode(6)
-			if _, err := app.FindFirstRecordByFilter("leagues", "inviteCode = {:c}", map[string]any{"c": code}); err != nil {
-				break
-			}
-		}
+		code := uniqueCode(app)
 
 		def, _ := app.FindFirstRecordByFilter("scoring_configs", "isDefault = true")
 
@@ -161,11 +181,19 @@ func Register(app core.App, se *core.ServeEvent) {
 			}
 			cnt, _ := app.CountRecords("league_members",
 				dbx.HashExp{"league": lg.Id})
+			role := m.GetString("role")
+			private := lg.GetBool("privateCode")
+			// On a private league only the owner may see/share the code.
+			code := lg.GetString("inviteCode")
+			if private && role != "owner" {
+				code = ""
+			}
 			out = append(out, map[string]any{
 				"id":         lg.Id,
 				"name":       lg.GetString("name"),
-				"inviteCode": lg.GetString("inviteCode"),
-				"role":       m.GetString("role"),
+				"inviteCode": code,
+				"role":       role,
+				"private":    private,
 				"members":    cnt,
 			})
 		}
@@ -203,6 +231,94 @@ func Register(app core.App, se *core.ServeEvent) {
 			}
 		}
 		return e.JSON(http.StatusOK, lb)
+	})
+
+	// ---- Owner-only management (rename, regenerate code, privacy, remove) ----
+
+	// POST /api/leagues/{id}/rename  { "name": "..." }
+	g.POST("/{id}/rename", func(e *core.RequestEvent) error {
+		lg, err := ownedLeague(app, e, e.Request.PathValue("id"))
+		if err != nil {
+			return err
+		}
+		var body struct {
+			Name string `json:"name"`
+		}
+		if err := e.BindBody(&body); err != nil {
+			return bad(e, http.StatusBadRequest, err.Error())
+		}
+		name := strings.TrimSpace(body.Name)
+		if name == "" {
+			return bad(e, http.StatusBadRequest, "name required")
+		}
+		lg.Set("name", name)
+		if err := app.Save(lg); err != nil {
+			return err
+		}
+		return e.JSON(http.StatusOK, map[string]any{"id": lg.Id, "name": name})
+	})
+
+	// POST /api/leagues/{id}/code/regenerate
+	g.POST("/{id}/code/regenerate", func(e *core.RequestEvent) error {
+		lg, err := ownedLeague(app, e, e.Request.PathValue("id"))
+		if err != nil {
+			return err
+		}
+		code := uniqueCode(app)
+		lg.Set("inviteCode", code)
+		if err := app.Save(lg); err != nil {
+			return err
+		}
+		return e.JSON(http.StatusOK, map[string]any{"inviteCode": code})
+	})
+
+	// POST /api/leagues/{id}/code/visibility  { "private": true }
+	g.POST("/{id}/code/visibility", func(e *core.RequestEvent) error {
+		lg, err := ownedLeague(app, e, e.Request.PathValue("id"))
+		if err != nil {
+			return err
+		}
+		var body struct {
+			Private bool `json:"private"`
+		}
+		if err := e.BindBody(&body); err != nil {
+			return bad(e, http.StatusBadRequest, err.Error())
+		}
+		lg.Set("privateCode", body.Private)
+		if err := app.Save(lg); err != nil {
+			return err
+		}
+		return e.JSON(http.StatusOK, map[string]any{"private": body.Private})
+	})
+
+	// POST /api/leagues/{id}/members/remove  { "userId": "..." }
+	g.POST("/{id}/members/remove", func(e *core.RequestEvent) error {
+		lg, err := ownedLeague(app, e, e.Request.PathValue("id"))
+		if err != nil {
+			return err
+		}
+		var body struct {
+			UserID string `json:"userId"`
+		}
+		if err := e.BindBody(&body); err != nil {
+			return bad(e, http.StatusBadRequest, err.Error())
+		}
+		if body.UserID == "" {
+			return bad(e, http.StatusBadRequest, "userId required")
+		}
+		if body.UserID == lg.GetString("owner") {
+			return bad(e, http.StatusBadRequest, "the owner cannot be removed")
+		}
+		member, err := app.FindFirstRecordByFilter("league_members",
+			"league = {:l} && user = {:u}",
+			map[string]any{"l": lg.Id, "u": body.UserID})
+		if err != nil {
+			return bad(e, http.StatusNotFound, "not a member of this league")
+		}
+		if err := app.Delete(member); err != nil {
+			return err
+		}
+		return e.JSON(http.StatusOK, map[string]any{"ok": true})
 	})
 }
 

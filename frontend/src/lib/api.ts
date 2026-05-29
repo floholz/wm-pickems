@@ -14,6 +14,7 @@ export interface LeagueSummary {
 	name: string;
 	inviteCode: string;
 	role: string;
+	private: boolean;
 	members: number;
 }
 
@@ -52,5 +53,16 @@ export const api = {
 			league: { id: string; name: string };
 			rows: LeaderboardRow[];
 			scoring?: Record<string, unknown>;
-		}>(`/api/leagues/${id}/leaderboard`)
+		}>(`/api/leagues/${id}/leaderboard`),
+	// Owner-only league management.
+	renameLeague: (id: string, name: string) =>
+		post<{ id: string; name: string }>(`/api/leagues/${id}/rename`, { name }),
+	regenerateCode: (id: string) =>
+		post<{ inviteCode: string }>(`/api/leagues/${id}/code/regenerate`, {}),
+	setCodePrivacy: (id: string, isPrivate: boolean) =>
+		post<{ private: boolean }>(`/api/leagues/${id}/code/visibility`, {
+			private: isPrivate
+		}),
+	removeMember: (id: string, userId: string) =>
+		post<{ ok: boolean }>(`/api/leagues/${id}/members/remove`, { userId })
 };

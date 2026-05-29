@@ -8,7 +8,13 @@
 		Copy,
 		Share2,
 		ChevronDown,
-		Telescope
+		Telescope,
+		Settings,
+		Check,
+		X,
+		Lock,
+		RefreshCw,
+		UserMinus
 	} from '@lucide/svelte';
 
 	interface Cfg {
@@ -56,20 +62,107 @@
 	let error = $state('');
 	let tab = $state<'total' | 'tipsPoints' | 'forecastPoints'>('total');
 
+	// Owner-only management.
+	let isOwner = $state(false);
+	let isPrivate = $state(false);
+	let editing = $state(false);
+	let nameDraft = $state('');
+	let confirmRegen = $state(false);
+	let mgmtBusy = $state(false);
+	let mgmtError = $state('');
+
 	$effect(() => {
 		const lid = id;
 		loaded = false;
 		cfg = null;
+		editing = false;
+		confirmRegen = false;
+		mgmtError = '';
 		Promise.all([api.leaderboard(lid), api.myLeagues()])
 			.then(([lb, mine]) => {
 				league = lb.league;
 				rows = lb.rows;
 				cfg = (lb.scoring as Cfg | undefined) ?? null;
-				invite = mine.leagues.find((l) => l.id === lid)?.inviteCode ?? '';
+				const me = mine.leagues.find((l) => l.id === lid);
+				invite = me?.inviteCode ?? '';
+				isOwner = me?.role === 'owner';
+				isPrivate = me?.private ?? false;
 			})
 			.catch(() => (error = 'Could not load this league.'))
 			.finally(() => (loaded = true));
 	});
+
+	function enterEdit() {
+		nameDraft = league?.name ?? '';
+		mgmtError = '';
+		confirmRegen = false;
+		editing = true;
+	}
+	function exitEdit() {
+		editing = false;
+		confirmRegen = false;
+	}
+	async function saveName() {
+		const name = nameDraft.trim();
+		if (!league) return;
+		if (!name || name === league.name) {
+			exitEdit();
+			return;
+		}
+		mgmtBusy = true;
+		mgmtError = '';
+		try {
+			await api.renameLeague(league.id, name);
+			league = { ...league, name };
+			exitEdit();
+		} catch {
+			mgmtError = 'Could not rename the league.';
+		} finally {
+			mgmtBusy = false;
+		}
+	}
+	async function setPrivacy(next: boolean) {
+		if (!league || next === isPrivate) return;
+		mgmtBusy = true;
+		mgmtError = '';
+		try {
+			await api.setCodePrivacy(league.id, next);
+			isPrivate = next;
+		} catch {
+			mgmtError = 'Could not update visibility.';
+		} finally {
+			mgmtBusy = false;
+		}
+	}
+	async function regenerate() {
+		if (!league) return;
+		mgmtBusy = true;
+		mgmtError = '';
+		try {
+			const r = await api.regenerateCode(league.id);
+			invite = r.inviteCode;
+			confirmRegen = false;
+			revealed = true;
+		} catch {
+			mgmtError = 'Could not regenerate the code.';
+		} finally {
+			mgmtBusy = false;
+		}
+	}
+	async function removeMember(userId: string, name: string) {
+		if (!league) return;
+		if (!confirm(`Remove ${name} from this league?`)) return;
+		mgmtBusy = true;
+		mgmtError = '';
+		try {
+			await api.removeMember(league.id, userId);
+			rows = rows.filter((r) => r.userId !== userId);
+		} catch {
+			mgmtError = 'Could not remove the member.';
+		} finally {
+			mgmtBusy = false;
+		}
+	}
 
 	let sorted = $derived(
 		[...rows].sort((a, b) => b[tab] - a[tab])
@@ -98,14 +191,76 @@
 {:else if !loaded}
 	<p class="muted">Loading…</p>
 {:else if league}
-	<p class="kicker">League</p>
-	<h1>{league.name}</h1>
+	<div class="lhead">
+		<div class="ltitle">
+			<p class="kicker">League</p>
+			{#if editing}
+				<input
+					class="input nameedit"
+					bind:value={nameDraft}
+					maxlength="64"
+					aria-label="League name"
+					onkeydown={(e) => e.key === 'Enter' && saveName()}
+				/>
+			{:else}
+				<h1>{league.name}</h1>
+			{/if}
+		</div>
+		{#if isOwner}
+			<div class="lactions">
+				{#if editing}
+					<button
+						class="btn secondary icon"
+						onclick={saveName}
+						disabled={mgmtBusy}
+						aria-label="Save name"><Check size={18} /></button
+					>
+					<button
+						class="btn secondary icon"
+						onclick={exitEdit}
+						disabled={mgmtBusy}
+						aria-label="Done editing"><X size={18} /></button
+					>
+				{:else}
+					<button
+						class="btn secondary icon"
+						onclick={enterEdit}
+						aria-label="Manage league"><Settings size={18} /></button
+					>
+				{/if}
+			</div>
+		{/if}
+	</div>
+
+	{#if mgmtError}<p class="error">{mgmtError}</p>{/if}
+
+	{#if editing}
+		<section class="card vis">
+			<div class="muted small">Invite code visibility</div>
+			<div class="tabs vistabs">
+				<button class:active={!isPrivate} onclick={() => setPrivacy(false)} disabled={mgmtBusy}
+					>Members</button
+				>
+				<button class:active={isPrivate} onclick={() => setPrivacy(true)} disabled={mgmtBusy}
+					>Private</button
+				>
+			</div>
+			<p class="muted small hint">
+				{isPrivate
+					? 'Only you can see and share the invite code.'
+					: 'Everyone in the league can see and share the invite code.'}
+			</p>
+		</section>
+	{/if}
 
 	{#if invite && invite !== 'GLOBAL'}
 		<section class="card invite">
 			<div class="irow">
 				<div class="ic">
-					<div class="muted small">Invite code</div>
+					<div class="muted small">
+						Invite code
+						{#if isPrivate}<span class="lockpill"><Lock size={11} /> Private</span>{/if}
+					</div>
 					<div class="code" class:masked={!revealed}>
 						{revealed ? invite : '•'.repeat(invite.length || 6)}
 					</div>
@@ -126,6 +281,27 @@
 				<Share2 size={16} />
 				{linkCopied ? 'Link copied!' : 'Share invite link'}
 			</button>
+			{#if editing}
+				{#if confirmRegen}
+					<p class="muted small hint regwarn">
+						This invalidates the current code and any links already shared.
+					</p>
+					<div class="regrow">
+						<button class="btn danger" onclick={regenerate} disabled={mgmtBusy}>
+							Regenerate
+						</button>
+						<button
+							class="btn secondary"
+							onclick={() => (confirmRegen = false)}
+							disabled={mgmtBusy}>Cancel</button
+						>
+					</div>
+				{:else}
+					<button class="btn ghost regenbtn" onclick={() => (confirmRegen = true)}>
+						<RefreshCw size={16} /> Regenerate code
+					</button>
+				{/if}
+			{/if}
 		</section>
 	{/if}
 
@@ -182,6 +358,20 @@
 								>
 									<Telescope size={15} />
 								</a>
+								{#if editing && r.userId !== auth.user?.id}
+									<button
+										class="rmbtn"
+										title="Remove {r.name}"
+										aria-label="Remove {r.name}"
+										disabled={mgmtBusy}
+										onclick={(e) => {
+											e.stopPropagation();
+											removeMember(r.userId, r.name);
+										}}
+									>
+										<UserMinus size={15} />
+									</button>
+								{/if}
 								<ChevronDown size={14} class="rx" />
 							</div>
 						</td>
@@ -299,6 +489,94 @@
 	}
 	h1 {
 		margin: 0 0 1rem;
+	}
+	.lhead {
+		display: flex;
+		align-items: flex-end;
+		gap: 0.75rem;
+		margin-bottom: 1rem;
+	}
+	.ltitle {
+		flex: 1;
+		min-width: 0;
+	}
+	.lhead .kicker {
+		margin: 0;
+	}
+	.lhead h1 {
+		margin: 0.1rem 0 0;
+	}
+	.nameedit {
+		font-size: 1.5rem;
+		font-weight: 700;
+		margin-top: 0.15rem;
+	}
+	.lactions {
+		display: flex;
+		gap: 0.4rem;
+		flex: none;
+	}
+	.icon {
+		width: auto;
+		padding: 0.6rem;
+	}
+	.vis {
+		margin-bottom: 1rem;
+	}
+	.vistabs {
+		margin: 0.5rem 0 0;
+	}
+	.hint {
+		margin: 0.5rem 0 0;
+	}
+	.lockpill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		margin-left: 0.35rem;
+		padding: 0.05rem 0.4rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		font-size: 0.7rem;
+		vertical-align: middle;
+	}
+	.regenbtn {
+		width: auto;
+		margin-top: 0.85rem;
+	}
+	.regwarn {
+		margin-top: 0.85rem;
+	}
+	.btn.danger {
+		width: auto;
+		background: var(--danger);
+		color: #fff;
+		border-color: transparent;
+	}
+	.regrow {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 0.4rem;
+	}
+	.regrow .btn.secondary {
+		width: auto;
+	}
+	.rmbtn {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		padding: 0.15rem;
+		background: none;
+		border: none;
+		color: var(--muted);
+		cursor: pointer;
+	}
+	.rmbtn:hover:not(:disabled) {
+		color: var(--danger);
+	}
+	.rmbtn:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 	.irow {
 		display: flex;
