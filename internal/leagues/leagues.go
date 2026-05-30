@@ -379,6 +379,69 @@ func Register(app core.App, se *core.ServeEvent) {
 		}
 		return e.JSON(http.StatusOK, map[string]any{"ok": true})
 	})
+
+	// GET /api/leagues/{id}/bots — bot accounts NOT yet in this league, so the
+	// owner can add them. Owner-only (the management panel is owner-only).
+	g.GET("/{id}/bots", func(e *core.RequestEvent) error {
+		lg, err := ownedLeague(app, e, e.Request.PathValue("id"))
+		if err != nil {
+			return err
+		}
+		bots, err := app.FindRecordsByFilter("users", "role = 'bot'", "name", 0, 0)
+		if err != nil {
+			return err
+		}
+		out := make([]map[string]any, 0, len(bots))
+		for _, b := range bots {
+			if existing, _ := app.FindFirstRecordByFilter("league_members",
+				"league = {:l} && user = {:u}",
+				map[string]any{"l": lg.Id, "u": b.Id}); existing != nil {
+				continue // already a member
+			}
+			out = append(out, map[string]any{
+				"userId":  b.Id,
+				"name":    b.GetString("name"),
+				"avatar":  b.GetString("avatar"),
+				"botKind": b.GetString("botKind"),
+			})
+		}
+		return e.JSON(http.StatusOK, map[string]any{"bots": out})
+	})
+
+	// POST /api/leagues/{id}/bots/add  { "userId": "..." } — add a bot account
+	// to the league. Owner-only, and the target must actually be a bot user so
+	// owners can't conscript arbitrary people into their league.
+	g.POST("/{id}/bots/add", func(e *core.RequestEvent) error {
+		lg, err := ownedLeague(app, e, e.Request.PathValue("id"))
+		if err != nil {
+			return err
+		}
+		var body struct {
+			UserID string `json:"userId"`
+		}
+		if err := e.BindBody(&body); err != nil {
+			return bad(e, http.StatusBadRequest, err.Error())
+		}
+		if body.UserID == "" {
+			return bad(e, http.StatusBadRequest, "userId required")
+		}
+		u, err := app.FindRecordById("users", body.UserID)
+		if err != nil {
+			return bad(e, http.StatusNotFound, "user not found")
+		}
+		if u.GetString("role") != "bot" {
+			return bad(e, http.StatusBadRequest, "only bot accounts can be added this way")
+		}
+		if existing, _ := app.FindFirstRecordByFilter("league_members",
+			"league = {:l} && user = {:u}",
+			map[string]any{"l": lg.Id, "u": body.UserID}); existing != nil {
+			return e.JSON(http.StatusOK, map[string]any{"ok": true, "already": true})
+		}
+		if err := addMember(app, lg.Id, body.UserID, "member"); err != nil {
+			return err
+		}
+		return e.JSON(http.StatusOK, map[string]any{"ok": true})
+	})
 }
 
 func addMember(app core.App, leagueID, userID, role string) error {

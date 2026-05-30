@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { api, type LeaderboardRow } from '$lib/api';
+	import { api, type LeaderboardRow, type BotSummary } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 	import { pb } from '$lib/pb';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -17,6 +17,7 @@
 		Lock,
 		RefreshCw,
 		UserMinus,
+		UserPlus,
 		Bot,
 		ShieldCheck
 	} from '@lucide/svelte';
@@ -74,6 +75,8 @@
 	let confirmRegen = $state(false);
 	let mgmtBusy = $state(false);
 	let mgmtError = $state('');
+	let availableBots = $state<BotSummary[]>([]);
+	let botBusy = $state<string | null>(null);
 
 	$effect(() => {
 		const lid = id;
@@ -82,6 +85,7 @@
 		editing = false;
 		confirmRegen = false;
 		mgmtError = '';
+		availableBots = [];
 		Promise.all([api.leaderboard(lid), api.myLeagues()])
 			.then(([lb, mine]) => {
 				league = lb.league;
@@ -101,6 +105,39 @@
 		mgmtError = '';
 		confirmRegen = false;
 		editing = true;
+		loadBots();
+	}
+
+	async function loadBots() {
+		if (!isOwner) return;
+		try {
+			availableBots = (await api.availableBots(id)).bots;
+		} catch {
+			availableBots = [];
+		}
+	}
+
+	async function refreshRows() {
+		try {
+			rows = (await api.leaderboard(id)).rows;
+		} catch {
+			/* keep current rows on a transient error */
+		}
+	}
+
+	async function addBot(b: BotSummary) {
+		if (!league) return;
+		botBusy = b.userId;
+		mgmtError = '';
+		try {
+			await api.addBot(league.id, b.userId);
+			availableBots = availableBots.filter((x) => x.userId !== b.userId);
+			await refreshRows();
+		} catch {
+			mgmtError = `Could not add ${b.name}.`;
+		} finally {
+			botBusy = null;
+		}
 	}
 	function exitEdit() {
 		editing = false;
@@ -161,6 +198,8 @@
 		try {
 			await api.removeMember(league.id, userId);
 			rows = rows.filter((r) => r.userId !== userId);
+			// A removed bot becomes available to add again.
+			await loadBots();
 		} catch {
 			mgmtError = 'Could not remove the member.';
 		} finally {
@@ -175,9 +214,9 @@
 
 	// Build the avatar URL the same way auth.svelte does — a users.avatar file
 	// resolves to /api/files/users/{id}/{filename} (same origin).
-	function avatarUrl(r: LeaderboardRow): string | null {
-		return r.avatar
-			? pb.files.getURL({ id: r.userId, collectionName: 'users' }, r.avatar)
+	function avatarUrl(userId: string, avatar?: string | null): string | null {
+		return avatar
+			? pb.files.getURL({ id: userId, collectionName: 'users' }, avatar)
 			: null;
 	}
 
@@ -361,7 +400,7 @@
 						<td class="rank">{i + 1}</td>
 						<td class="player">
 							<div class="pwrap">
-								<Avatar name={r.name} src={avatarUrl(r)} size={28} />
+								<Avatar name={r.name} src={avatarUrl(r.userId, r.avatar)} size={28} />
 								<span class="pname">{r.name}</span>
 								{#if r.role === 'bot'}
 									<span class="rolepill" title="Bot player"><Bot size={11} /> Bot</span>
@@ -439,6 +478,39 @@
 						</tr>
 					{/if}
 				{/each}
+
+				{#if editing && availableBots.length}
+					<tr class="botsep">
+						<td colspan="12">Add a bot player</td>
+					</tr>
+					{#each availableBots as b (b.userId)}
+						<tr class="addbot">
+							<td class="rank"></td>
+							<td class="player" colspan="11">
+								<div class="pwrap">
+									<Avatar
+										name={b.name}
+										src={avatarUrl(b.userId, b.avatar)}
+										size={28}
+									/>
+									<span class="pname">{b.name}</span>
+									<span class="rolepill" title="Bot player">
+										<Bot size={11} />
+										{b.botKind || 'Bot'}
+									</span>
+									<button
+										class="addbtn"
+										title="Add {b.name} to this league"
+										disabled={botBusy === b.userId || mgmtBusy}
+										onclick={() => addBot(b)}
+									>
+										<UserPlus size={15} /> Add
+									</button>
+								</div>
+							</td>
+						</tr>
+					{/each}
+				{/if}
 			</tbody>
 		</table>
 		<p class="muted small note">
@@ -593,6 +665,43 @@
 		color: var(--danger);
 	}
 	.rmbtn:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+	.botsep td {
+		padding-top: 0.9rem;
+		color: var(--muted);
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		border-bottom: none;
+	}
+	tr.addbot .pname {
+		color: var(--muted);
+	}
+	tr.addbot .rolepill {
+		text-transform: capitalize;
+	}
+	.addbtn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-left: auto;
+		flex: none;
+		padding: 0.25rem 0.6rem;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		color: var(--accent);
+		font-weight: 600;
+		font-size: 0.8rem;
+		cursor: pointer;
+	}
+	.addbtn:hover:not(:disabled) {
+		border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+	}
+	.addbtn:disabled {
 		opacity: 0.5;
 		cursor: default;
 	}

@@ -33,6 +33,13 @@ export interface LeaderboardRow {
 	forecast?: Record<string, number>;
 }
 
+export interface BotSummary {
+	userId: string;
+	name: string;
+	avatar?: string;
+	botKind?: string;
+}
+
 export const api = {
 	createLeague: (name: string) =>
 		post<{ id: string; name: string; inviteCode: string }>(
@@ -66,5 +73,12 @@ export const api = {
 			private: isPrivate
 		}),
 	removeMember: (id: string, userId: string) =>
-		post<{ ok: boolean }>(`/api/leagues/${id}/members/remove`, { userId })
+		post<{ ok: boolean }>(`/api/leagues/${id}/members/remove`, { userId }),
+	// Owner-only: bot accounts not yet in the league, and adding one.
+	availableBots: (id: string) =>
+		get<{ bots: BotSummary[] }>(`/api/leagues/${id}/bots`),
+	addBot: (id: string, userId: string) =>
+		post<{ ok: boolean; already?: boolean }>(`/api/leagues/${id}/bots/add`, {
+			userId
+		})
 };
