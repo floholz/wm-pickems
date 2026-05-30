@@ -62,29 +62,56 @@ func (b *Brain) complete(ctx context.Context, task string) (string, error) {
 	return sb.String(), nil
 }
 
-// completeJSON runs complete() and unmarshals the response into out, tolerating
-// a stray ```json fence if the model adds one.
+// completeJSON runs complete() and unmarshals the response into out. The model
+// occasionally wraps the JSON in a ```fence``` or adds a sentence of preamble,
+// so we extract the first complete JSON object rather than trusting the whole
+// reply to be valid JSON.
 func (b *Brain) completeJSON(ctx context.Context, task string, out any) error {
 	raw, err := b.complete(ctx, task)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal([]byte(stripFence(raw)), out)
+	js := extractJSON(raw)
+	if js == "" {
+		return fmt.Errorf("no JSON object in model reply: %.120q", strings.TrimSpace(raw))
+	}
+	return json.Unmarshal([]byte(js), out)
 }
 
-func stripFence(s string) string {
-	s = strings.TrimSpace(s)
-	if !strings.HasPrefix(s, "```") {
-		return s
+// extractJSON returns the first balanced {...} object found in s, ignoring any
+// surrounding prose or code fences (string contents and escapes are respected
+// so braces inside strings don't throw off the depth count).
+func extractJSON(s string) string {
+	start := strings.IndexByte(s, '{')
+	if start < 0 {
+		return ""
 	}
-	// Drop the opening fence line and the trailing fence.
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		s = s[i+1:]
+	depth, inStr, esc := 0, false, false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if inStr {
+			switch {
+			case esc:
+				esc = false
+			case c == '\\':
+				esc = true
+			case c == '"':
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = true
+		case '{':
+			depth++
+		case '}':
+			if depth--; depth == 0 {
+				return s[start : i+1]
+			}
+		}
 	}
-	if i := strings.LastIndex(s, "```"); i >= 0 {
-		s = s[:i]
-	}
-	return strings.TrimSpace(s)
+	return "" // unbalanced — treat as no object
 }
 
 // ---- forecast: group standings + best thirds ----
@@ -116,7 +143,7 @@ func (b *Brain) PredictGroups(ctx context.Context, groups []groupPick) (map[stri
 		sb.WriteString(strings.Join(parts, ", ") + "\n")
 	}
 	sb.WriteString(`
-Respond with ONLY a JSON object, no prose, no markdown:
+Output ONLY the JSON object — begin your reply with { and end with }, no preamble, no explanation, no markdown:
 {"groups": {"A": ["id1","id2","id3","id4"], ... all 12 groups},
  "bestThirds": ["A","C", ... exactly 8 group letters]}
 Use the exact team ids given above, each group ordered best-to-worst.`)
@@ -149,7 +176,7 @@ func (b *Brain) PredictWinners(ctx context.Context, stageLabel string, ms []matc
 			m.Num, m.Home.Name, m.Home.ID, m.Away.Name, m.Away.ID)
 	}
 	sb.WriteString(`
-Respond with ONLY a JSON object mapping each match number to "home" or "away":
+Output ONLY the JSON object — begin your reply with { and end with }, no preamble, no explanation, no markdown:
 {"winners": {"73": "home", "74": "away", ...}}`)
 
 	var resp struct {
@@ -206,7 +233,7 @@ func (b *Brain) PredictTips(ctx context.Context, targets []tipTarget) (map[strin
 		fmt.Fprintf(&sb, "key=%s [%s] %s vs %s (kickoff %s)\n", t.MatchID, kind, t.Home, t.Away, t.Kickoff)
 	}
 	sb.WriteString(`
-Respond with ONLY a JSON object mapping each key to [homeGoals, awayGoals] integers:
+Output ONLY the JSON object — begin your reply with { and end with }, no preamble, no explanation, no markdown:
 {"tips": {"<key>": [2, 1], ...}}`)
 
 	var resp struct {
