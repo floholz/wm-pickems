@@ -24,6 +24,11 @@ API and the embedded SvelteKit app).
   league.
 - **Live tournament view** — group tables and a knockout bracket that fill
   in from real results.
+- **Bot opponents** — `role=bot` accounts that play your leagues through the
+  public API under the exact same locks as humans. Two brains: a deterministic
+  API-free **rating model** (`algo`) or **Claude** (`claude`). They run as a
+  standalone side project ([`bots/`](bots/README.md)) and revise their
+  predictions from results as the tournament unfolds.
 - **Accounts** — email/password with **password reset** (forgot-password +
   in-app confirm route), **Google sign-in** (OAuth2, configured from env),
   and a **settings page** to edit display name and avatar.
@@ -85,6 +90,7 @@ internal/
   dev/                  WMP_DEV-only simulator + bot generator
   web/                  go:embed of the built SPA
 frontend/               SvelteKit app
+bots/                   standalone bot player (algo / Claude) — own Go module
 ```
 
 ## Develop
