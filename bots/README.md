@@ -7,14 +7,15 @@ A standalone side project that plays [wm-pickems](../) as a bot. It logs in as a
 - can't submit a Forecast after the tournament starts,
 - can't see anyone else's tips before kickoff.
 
-No bypass anywhere — the bot competes on equal footing. It's a separate Go module with no dependency on the main app: just an HTTP client + the Anthropic SDK.
+No bypass anywhere — the bot competes on equal footing. It's a separate Go module with no dependency on the main app: just an HTTP client + the Anthropic SDK (and a small HTTP client for the OpenRouter gateway).
 
 ## Strategies (`BOT_KIND`)
 
 The prediction "brain" is selected by `BOT_KIND`; everything else (auth, the bracket resolver, the submit flow) is shared:
 
 - **`algo`** (default) — a deterministic, API-free **rating model**. Each team gets a strength rating from a small embedded table (`algo.go`, keyed by FIFA code, neutral default for unknowns). Group order = by rating; best-8 thirds = the highest-rated third-placed teams; the bracket = higher rating advances (ties → home); scorelines = expected goals from the rating gap (`round(1.25 + gap/160)`, uncapped so a genuine mismatch can read 4–5+; group games may draw, knockouts coerced decisive). It also **learns**: results Elo-adjust the ratings (see _Feedback loop_). No API key required. Tweak the ratings table to change its starting opinion.
-- **`claude`** — asks Claude (Anthropic API) for predictions. Needs `ANTHROPIC_API_KEY`. See _How it works_ below.
+- **`claude`** — asks Claude via the **native Anthropic API** for predictions. Needs `ANTHROPIC_API_KEY`. Best-ergonomics path: prompt caching on the system prefix + adaptive thinking. See _How it works_ below.
+- **`openrouter`** — asks any provider through **[OpenRouter](https://openrouter.ai)**, the one-key gateway fronting Claude, GPT, Gemini, and more. Needs `OPENROUTER_API_KEY` + `OPENROUTER_MODEL` (e.g. `openai/gpt-5.1`, `google/gemini-2.5-pro`, `anthropic/claude-opus-4-8`). The point: run many model bots off a single key and balance instead of one account per vendor. Shares all of `claude`'s prompt/schema/forecast logic — only the transport differs (an OpenAI-compatible request with strict `json_schema` structured outputs, honored by the Tier-1 providers Claude/GPT/Gemini).
 
 ## How it works
 
@@ -35,12 +36,21 @@ It then reconciles **every still-open match**: creating missing tips and **updat
 
 The large, unchanging tournament reference (teams, groups, knockout skeleton) is sent as a **cached system prompt**, so every prediction call after the first reuses it as a prompt-cache prefix.
 
-`CLAUDE_MODEL` accepts any chat model (default `claude-opus-4-8`). Opus 4.6+/Sonnet 4.6 run with adaptive thinking; `claude-haiku-4-5` has no adaptive thinking, so it runs with thinking omitted — handy as a cheaper/faster model for dev.
+### Brains and completers
+
+Both LLM strategies share one `Brain` (`brain.go`) that owns everything provider-agnostic — prompt assembly, JSON schemas, response parsing — and talks to a pluggable **`completer`** (the provider transport):
+
+- `anthropicCompleter` (`completer_anthropic.go`) — native Anthropic API, with prompt caching + adaptive thinking. Selected by `BOT_KIND=claude`.
+- `openrouterCompleter` (`completer_openrouter.go`) — a small OpenAI-compatible HTTP client pointed at OpenRouter, requesting strict `json_schema` structured outputs. Selected by `BOT_KIND=openrouter`.
+
+So adding a provider is just a different completer; the prompts, schemas, and downstream repair logic (`repairOrder`/`chooseThirds`/`selectTip`) are identical and act as a safety net regardless of which model answers.
+
+`CLAUDE_MODEL` (claude only) accepts any chat model (default `claude-opus-4-8`). Opus 4.6+/Sonnet 4.6 run with adaptive thinking; `claude-haiku-4-5` has no adaptive thinking, so it runs with thinking omitted — handy as a cheaper/faster model for dev. `OPENROUTER_MODEL` (openrouter only, required) is an OpenRouter model id like `openai/gpt-5.1` or `google/gemini-2.5-pro`.
 
 ## Setup
 
-1. In the PocketBase admin, create the bot's user account, set `role=bot` and `botKind` (`claude` or `algo`), and add it to your league(s) — or set `BOT_LEAGUE_CODE`.
-2. Copy `.env.example` and fill in `BOT_EMAIL`, `BOT_PASSWORD`, `WMP_BASE_URL`, and `BOT_KIND`. For `claude` also set `ANTHROPIC_API_KEY`; `algo` needs no key.
+1. In the PocketBase admin, create the bot's user account, set `role=bot` and `botKind` (`claude`, `openrouter`, or `algo`), and add it to your league(s) — or set `BOT_LEAGUE_CODE`.
+2. Copy `.env.example` and fill in `BOT_EMAIL`, `BOT_PASSWORD`, `WMP_BASE_URL`, and `BOT_KIND`. For `claude` also set `ANTHROPIC_API_KEY`; for `openrouter` set `OPENROUTER_API_KEY` + `OPENROUTER_MODEL`; `algo` needs no key.
 
 ## Run
 
@@ -118,7 +128,7 @@ See `.env.example`. Defaults: `WMP_BASE_URL=http://127.0.0.1:8090`, `BOT_KIND=al
 
 ### Logging
 
-Structured logging via `log/slog` to **stdout**. Set `LOG_FORMAT=json` in containers for shipper-friendly structured logs (Grafana Alloy/Promtail → Loki), or leave the default `text` for readable local output. Notable events: `ai_call` (per Anthropic call — model, input/output/cache token counts, duration; `cache_read=0` across a run means the cached prompt prefix isn't hitting), `tip` (created/revised with old→new scoreline and trigger), and the per-run `run_id` that ties a run's lines together. The `algo` strategy emits no `ai_call` events (it makes no API calls).
+Structured logging via `log/slog` to **stdout**. Set `LOG_FORMAT=json` in containers for shipper-friendly structured logs (Grafana Alloy/Promtail → Loki), or leave the default `text` for readable local output. Notable events: `ai_call` (per LLM call, claude and openrouter alike — model, input/output/cache token counts, duration; `cache_read=0` across a run means the cached prompt prefix isn't hitting), `tip` (created/revised with old→new scoreline and trigger), and the per-run `run_id` that ties a run's lines together. The `algo` strategy emits no `ai_call` events (it makes no API calls).
 
 Set `BOT_RATIONALE=1` (claude only) to have the model attach a one-line reason to each prediction. Rationales are **persisted**: per-match on `tips.rationale` (also logged on the `tip` event), and per-group/per-bracket-pick on `forecasts.rationale` (`{groups:{letter:why}, bracket:{key:why}}`). They inherit pick visibility — hidden until kickoff/lock, then revealed — for displaying "why" later. Costs extra output tokens, so it's off by default.
 
@@ -132,4 +142,4 @@ go test ./...
 
 ## Future
 
-ChatGPT drops in as a third `Predictor` (`predictor.go`) alongside `claude` and `algo`; the client and bracket logic are shared. Showing each bot's reasoning in the app UI is a planned follow-up (would add an optional `rationale` field on tips).
+GPT, Gemini, and others already run today via `BOT_KIND=openrouter` (Tier-1 providers with strict structured-output support). Next up: a JSON-mode + retry fallback in the completer so the spottier models (DeepSeek, Grok, Kimi) can play too. Showing each bot's reasoning in the app UI is partially done (the `rationale` field is persisted; richer display is a follow-up).

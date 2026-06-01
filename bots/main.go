@@ -11,11 +11,13 @@
 //	WMP_BASE_URL    base URL of the app   (default http://127.0.0.1:8090)
 //	BOT_EMAIL       the bot account's email      (required)
 //	BOT_PASSWORD    the bot account's password   (required)
-//	BOT_KIND        strategy: algo (default) | claude
+//	BOT_KIND        strategy: algo (default) | claude | openrouter
 //	ANTHROPIC_API_KEY   Anthropic API key   (required for BOT_KIND=claude)
 //	CLAUDE_MODEL    model id (claude only) (default claude-opus-4-8)
+//	OPENROUTER_API_KEY  OpenRouter key      (required for BOT_KIND=openrouter)
+//	OPENROUTER_MODEL    model id (openrouter only, required), e.g. openai/gpt-5.1
 //	BOT_LEAGUE_CODE optional invite code to auto-join on start
-//	BOT_RATIONALE   ask for + log a one-line reason per prediction (claude only)
+//	BOT_RATIONALE   ask for + log a one-line reason per prediction (claude/openrouter)
 //	LOG_FORMAT      log output: text (default) | json
 //
 // Provision the bot once in the PocketBase admin: create the user, set
@@ -52,7 +54,6 @@ func loadConfig() (config, error) {
 		email:      os.Getenv("BOT_EMAIL"),
 		password:   os.Getenv("BOT_PASSWORD"),
 		kind:       strings.ToLower(envOr("BOT_KIND", "algo")),
-		model:      envOr("CLAUDE_MODEL", "claude-opus-4-8"),
 		leagueCode: os.Getenv("BOT_LEAGUE_CODE"),
 		rationale:  envBool("BOT_RATIONALE"),
 	}
@@ -64,10 +65,21 @@ func loadConfig() (config, error) {
 		if os.Getenv("ANTHROPIC_API_KEY") == "" {
 			return c, fmt.Errorf("ANTHROPIC_API_KEY is required for BOT_KIND=claude")
 		}
+		c.model = envOr("CLAUDE_MODEL", "claude-opus-4-8")
+	case "openrouter":
+		if os.Getenv("OPENROUTER_API_KEY") == "" {
+			return c, fmt.Errorf("OPENROUTER_API_KEY is required for BOT_KIND=openrouter")
+		}
+		// No universal default across providers — the operator picks the model.
+		c.model = os.Getenv("OPENROUTER_MODEL")
+		if c.model == "" {
+			return c, fmt.Errorf("OPENROUTER_MODEL is required for BOT_KIND=openrouter " +
+				"(e.g. anthropic/claude-opus-4-8, openai/gpt-5.1, google/gemini-2.5-pro)")
+		}
 	case "algo":
 		// No API key needed — fully deterministic.
 	default:
-		return c, fmt.Errorf("unknown BOT_KIND %q (want claude or algo)", c.kind)
+		return c, fmt.Errorf("unknown BOT_KIND %q (want claude, openrouter, or algo)", c.kind)
 	}
 	return c, nil
 }
@@ -217,11 +229,12 @@ func runOnce(cfg config, opts runOpts) error {
 	}
 
 	var predictor Predictor
-	switch cfg.kind {
-	case "algo":
+	if cfg.kind == "algo" {
 		predictor = NewAlgoBrain(teams, finished)
 		log.Info("strategy selected", "strategy", "algo", "results_applied", len(finished))
-	default:
+	} else {
+		// LLM brains (claude | openrouter) share all prompt/schema/repair logic
+		// via Brain; only the completer (provider transport) differs.
 		ctxText := buildResultsText(finished, teamName)
 		if st := buildStandings(finished, structure, teamName); st != "" {
 			if ctxText != "" {
@@ -229,8 +242,19 @@ func runOnce(cfg config, opts runOpts) error {
 			}
 			ctxText += st
 		}
-		predictor = NewBrain(cfg.model, buildReference(teams, structure), ctxText, cfg.rationale, log)
-		log.Info("strategy selected", "strategy", "claude", "model", cfg.model, "results_in_context", len(finished))
+		reference := buildReference(teams, structure)
+		var comp completer
+		switch cfg.kind {
+		case "openrouter":
+			comp, err = newOpenRouterCompleter(cfg.model, reference, log)
+			if err != nil {
+				return fmt.Errorf("openrouter setup: %w", err)
+			}
+		default: // claude — native Anthropic transport
+			comp = newAnthropicCompleter(cfg.model, reference, log)
+		}
+		predictor = NewBrain(comp, ctxText, cfg.rationale)
+		log.Info("strategy selected", "strategy", cfg.kind, "model", cfg.model, "results_in_context", len(finished))
 	}
 
 	if err := ensureForecast(ctx, c, predictor, structure, teamName, log, opts.forceForecast); err != nil {

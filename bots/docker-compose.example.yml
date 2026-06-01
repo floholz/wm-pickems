@@ -16,22 +16,52 @@ services:
     command: ["--loop", "--interval=1h"]
     networks: [wmpickems]
 
-  claude:
-    image: wm-pickems/bot:latest
-    container_name: wmp_bot_claude
-    restart: unless-stopped
-    env_file: .claude.env # BOT_EMAIL, BOT_PASSWORD, ANTHROPIC_API_KEY, WMP_BASE_URL, ...
-    command: ["--loop", "--interval=1h"]
-    networks: [wmpickems]
-    depends_on: [elo]
+  # anthropic:
+  #   image: wm-pickems/bot:latest
+  #   container_name: wmp_bot_claude
+  #   restart: unless-stopped
+  #   env_file: .claude-native.env # BOT_EMAIL, BOT_PASSWORD, ANTHROPIC_API_KEY, WMP_BASE_URL, ...
+  #   command: ["--loop", "--interval=1h"]
+  #   networks: [wmpickems]
+  #   depends_on: [elo]
 
-  # Add more bots later — same image, different env file:
+  # More model bots via OpenRouter — same image, BOT_KIND=openrouter, one
+  # OPENROUTER_API_KEY shared across them; only OPENROUTER_MODEL differs per env.
   # chatgpt:
   #   image: wm-pickems/bot:latest
   #   container_name: wmp_bot_chatgpt
   #   restart: unless-stopped
-  #   env_file: chatgpt.env
+  #   env_file: .chatgpt.env # ...BOT_KIND=openrouter, OPENROUTER_API_KEY, OPENROUTER_MODEL=openai/gpt-5.1
+  #   command: ["--loop", "--interval=1h"]
+  #   networks: [wmpickems]
   #   depends_on: [claude]
+
+  gemini:
+    image: wm-pickems/bot:latest
+    container_name: wmp_bot_gemini
+    restart: unless-stopped
+    env_file: .gemini.env # ...BOT_KIND=openrouter, OPENROUTER_API_KEY, OPENROUTER_MODEL=google/gemini-2.5-pro
+    command: ["--loop", "--interval=1h"]
+    networks: [wmpickems]
+    depends_on: [elo]
+
+  claude:
+    image: wm-pickems/bot:latest
+    container_name: wmp_bot_claude
+    restart: unless-stopped
+    env_file: .claude.env # ...BOT_KIND=openrouter, OPENROUTER_API_KEY, OPENROUTER_MODEL=google/gemini-2.5-pro
+    command: ["--loop", "--interval=1h"]
+    networks: [wmpickems]
+    depends_on: [elo]
+
+  gpt:
+    image: wm-pickems/bot:latest
+    container_name: wmp_bot_gpt
+    restart: unless-stopped
+    env_file: .gpt.env # ...BOT_KIND=openrouter, OPENROUTER_API_KEY, OPENROUTER_MODEL=google/gemini-2.5-pro
+    command: ["--loop", "--interval=1h"]
+    networks: [wmpickems]
+    depends_on: [elo]
 
 networks:
   wmpickems:
