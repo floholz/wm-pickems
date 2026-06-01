@@ -150,9 +150,11 @@ func (a *AlgoBrain) PredictWinners(_ context.Context, _ string, ms []matchup) (m
 }
 
 // PredictTips: expected goals from the rating gap. Group games may draw;
-// knockouts are coerced to a decisive favourite (the server needs a winner).
-func (a *AlgoBrain) PredictTips(_ context.Context, targets []tipTarget) (map[string]Scoreline, error) {
-	out := make(map[string]Scoreline, len(targets))
+// knockouts are coerced to a decisive favourite (the server needs a winner). The
+// algo commits to a single scoreline, so it returns a degenerate distribution
+// (one candidate at p=1) — selectTip then returns exactly that score.
+func (a *AlgoBrain) PredictTips(_ context.Context, targets []tipTarget) (map[string]TipOutcome, error) {
+	out := make(map[string]TipOutcome, len(targets))
 	for _, t := range targets {
 		rh, ra := a.rat(t.HomeID), a.rat(t.AwayID)
 		h, av := expectedGoals(rh, ra), expectedGoals(ra, rh)
@@ -163,7 +165,7 @@ func (a *AlgoBrain) PredictTips(_ context.Context, targets []tipTarget) (map[str
 				av++
 			}
 		}
-		out[t.MatchID] = Scoreline{Home: h, Away: av}
+		out[t.MatchID] = TipOutcome{Scores: []ScoreProb{{Home: h, Away: av, P: 1}}}
 	}
 	return out, nil
 }

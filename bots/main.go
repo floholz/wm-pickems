@@ -36,6 +36,7 @@ type config struct {
 	kind       string // "claude" (default) | "algo"
 	model      string
 	leagueCode string
+	rationale  bool // ask the model for + log a one-line reason per prediction (claude only)
 }
 
 func loadConfig() (config, error) {
@@ -46,6 +47,7 @@ func loadConfig() (config, error) {
 		kind:       strings.ToLower(envOr("BOT_KIND", "algo")),
 		model:      envOr("CLAUDE_MODEL", "claude-opus-4-8"),
 		leagueCode: os.Getenv("BOT_LEAGUE_CODE"),
+		rationale:  envBool("BOT_RATIONALE"),
 	}
 	if c.email == "" || c.password == "" {
 		return c, fmt.Errorf("BOT_EMAIL and BOT_PASSWORD are required")
@@ -68,6 +70,14 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func envBool(key string) bool {
+	switch strings.ToLower(os.Getenv(key)) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }
 
 // setupLogger configures the global slog logger from LOG_FORMAT: "text"
@@ -165,7 +175,7 @@ func runOnce(cfg config) error {
 		predictor = NewAlgoBrain(teams, finished)
 		log.Info("strategy selected", "strategy", "algo", "results_applied", len(finished))
 	default:
-		predictor = NewBrain(cfg.model, buildReference(teams, structure), buildResultsText(finished, teamName), log)
+		predictor = NewBrain(cfg.model, buildReference(teams, structure), buildResultsText(finished, teamName), cfg.rationale, log)
 		log.Info("strategy selected", "strategy", "claude", "model", cfg.model, "results_in_context", len(finished))
 	}
 
@@ -385,15 +395,18 @@ func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match,
 	for start := 0; start < len(targets); start += tipBatch {
 		end := min(start+tipBatch, len(targets))
 		batch := targets[start:end]
-		scores, err := pred.PredictTips(ctx, batch)
+		outcomes, err := pred.PredictTips(ctx, batch)
 		if err != nil {
 			return fmt.Errorf("predict tips: %w", err)
 		}
 		for _, t := range batch {
-			s, ok := scores[t.MatchID]
+			o, ok := outcomes[t.MatchID]
 			if !ok {
 				continue
 			}
+			// Pure shared decision layer: turn the brain's distribution into the
+			// points-maximizing concrete scoreline under the (global default) scoring.
+			s := selectTip(o, t.Stage, defaultWeights)
 			if ex, exists := tipByMatch[t.MatchID]; exists {
 				if ex.FtHome == s.Home && ex.FtAway == s.Away {
 					continue // prediction unchanged
@@ -403,34 +416,39 @@ func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match,
 					continue
 				}
 				updated++
-				log.Info("tip",
-					"action", "revised",
-					"match", t.MatchID,
-					"home_team", t.Home,
-					"away_team", t.Away,
-					"old", fmt.Sprintf("%d-%d", ex.FtHome, ex.FtAway),
-					"new", fmt.Sprintf("%d-%d", s.Home, s.Away),
-					"trigger", "new_result",
-				)
+				logTip(log, "revised", t, fmt.Sprintf("%d-%d", ex.FtHome, ex.FtAway), s, "new_result", o.Rationale)
 			} else {
 				if err := c.CreateTip(ctx, t.MatchID, s.Home, s.Away); err != nil {
 					log.Warn("create tip failed", "match", t.MatchID, "err", err)
 					continue
 				}
 				created++
-				log.Info("tip",
-					"action", "created",
-					"match", t.MatchID,
-					"home_team", t.Home,
-					"away_team", t.Away,
-					"new", fmt.Sprintf("%d-%d", s.Home, s.Away),
-					"trigger", "first_tip",
-				)
+				logTip(log, "created", t, "", s, "first_tip", o.Rationale)
 			}
 		}
 	}
 	log.Info("tips submitted", "created", created, "revised", updated)
 	return nil
+}
+
+// logTip emits one structured "tip" event. old is the previous scoreline ("" for
+// a first tip); rationale is included only when the brain supplied one.
+func logTip(log *slog.Logger, action string, t tipTarget, old string, s Scoreline, trigger, rationale string) {
+	attrs := []any{
+		"action", action,
+		"match", t.MatchID,
+		"home_team", t.Home,
+		"away_team", t.Away,
+		"new", fmt.Sprintf("%d-%d", s.Home, s.Away),
+		"trigger", trigger,
+	}
+	if old != "" {
+		attrs = append(attrs, "old", old)
+	}
+	if rationale != "" {
+		attrs = append(attrs, "rationale", rationale)
+	}
+	log.Info("tip", attrs...)
 }
 
 // buildResultsText is the Claude bot's feedback context: a compact, chronological

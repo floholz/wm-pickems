@@ -82,7 +82,12 @@ per group, exactly 8 thirds, or a decisive KO score.
 
 ---
 
-## Thread 2 — Probabilities → EV selection
+## Thread 2 — Probabilities → EV selection (✅ IMPLEMENTED)
+
+> **Done:** new `ev.go` — `ScoringWeights` (hardcoded WC2026 3/1/1/1 default with a sync note), `points()`, pure `selectTip()` (model distribution → EV-maximizing scoreline against a model-candidates ∪ common-grid set; KO draws excluded), and the `TipOutcome`/`ScoreProb` types. `Predictor.PredictTips` now returns `map[string]TipOutcome`; Claude emits a candidate-score distribution (schema gains `scores:[{home,away,p}]`), algo returns a degenerate `p=1` distribution. `submitTips` calls `selectTip` to get the concrete scoreline. Semantic cleanup (clamps/KO-draw) moved into `selectTip`/`normalizeDist`. `ev_test.go` covers points, degenerate, dominant-tendency, and KO-decisive cases.
+>
+> **Also landed here (deferred from Thread 3): rationale.** `BOT_RATIONALE` flag → `Brain.rationale`; when on, all three schemas carry a `rationale` field. Tips rationale rides the `tip` event via `TipOutcome.Rationale`; groups/winners log `group_pick`/`winner_pick` events. Claude-only. Docs updated.
+
 
 ### 2.1 Why (tied to the live scoring rules)
 

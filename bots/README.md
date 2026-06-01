@@ -90,6 +90,8 @@ See `.env.example`. Defaults: `WMP_BASE_URL=http://127.0.0.1:8090`, `BOT_KIND=al
 
 Structured logging via `log/slog` to **stdout**. Set `LOG_FORMAT=json` in containers for shipper-friendly structured logs (Grafana Alloy/Promtail → Loki), or leave the default `text` for readable local output. Notable events: `ai_call` (per Anthropic call — model, input/output/cache token counts, duration; `cache_read=0` across a run means the cached prompt prefix isn't hitting), `tip` (created/revised with old→new scoreline and trigger), and the per-run `run_id` that ties a run's lines together. The `algo` strategy emits no `ai_call` events (it makes no API calls).
 
+Set `BOT_RATIONALE=1` (claude only) to have the model attach a one-line reason to each prediction; it's logged on the `tip` events and as `group_pick`/`winner_pick` events. Costs extra output tokens, so it's off by default.
+
 ## Tests
 
 ```sh

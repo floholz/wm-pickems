@@ -17,20 +17,22 @@ import (
 // cached system prompt so every prediction call reuses it as a prompt-cache
 // prefix — only the per-call task in the user turn varies.
 type Brain struct {
-	client  anthropic.Client
-	model   string
-	system  string // static reference, identical across all calls (cache prefix)
-	results string // results-so-far summary, fed into tip prompts (the feedback loop)
-	log     *slog.Logger
+	client    anthropic.Client
+	model     string
+	system    string // static reference, identical across all calls (cache prefix)
+	results   string // results-so-far summary, fed into tip prompts (the feedback loop)
+	rationale bool   // ask for + log a one-line reason per prediction
+	log       *slog.Logger
 }
 
-func NewBrain(model, reference, results string, log *slog.Logger) *Brain {
+func NewBrain(model, reference, results string, rationale bool, log *slog.Logger) *Brain {
 	return &Brain{
-		client:  anthropic.NewClient(), // reads ANTHROPIC_API_KEY
-		model:   model,
-		system:  reference,
-		results: results,
-		log:     log,
+		client:    anthropic.NewClient(), // reads ANTHROPIC_API_KEY
+		model:     model,
+		system:    reference,
+		results:   results,
+		rationale: rationale,
+		log:       log,
 	}
 }
 
@@ -103,6 +105,7 @@ func (b *Brain) completeStructured(ctx context.Context, label, task string, sche
 
 func strSchema() map[string]any { return map[string]any{"type": "string"} }
 func intSchema() map[string]any { return map[string]any{"type": "integer"} }
+func numSchema() map[string]any { return map[string]any{"type": "number"} }
 
 func arr(items map[string]any) map[string]any { return map[string]any{"type": "array", "items": items} }
 
@@ -115,33 +118,45 @@ func obj(required []string, props map[string]any) map[string]any {
 	}
 }
 
-func groupsSchema() map[string]any {
+// withRationale adds a required "rationale" string to a record's schema when the
+// rationale feature is on.
+func withRationale(on bool, required []string, props map[string]any) ([]string, map[string]any) {
+	if on {
+		required = append(required, "rationale")
+		props["rationale"] = strSchema()
+	}
+	return required, props
+}
+
+func groupsSchema(rationale bool) map[string]any {
+	req, props := withRationale(rationale, []string{"letter", "teamIds"}, map[string]any{
+		"letter":  strSchema(),
+		"teamIds": arr(strSchema()),
+	})
 	return obj([]string{"groups", "bestThirds"}, map[string]any{
-		"groups": arr(obj([]string{"letter", "teamIds"}, map[string]any{
-			"letter":  strSchema(),
-			"teamIds": arr(strSchema()),
-		})),
+		"groups":     arr(obj(req, props)),
 		"bestThirds": arr(strSchema()),
 	})
 }
 
-func winnersSchema() map[string]any {
-	return obj([]string{"winners"}, map[string]any{
-		"winners": arr(obj([]string{"matchNum", "side"}, map[string]any{
-			"matchNum": intSchema(),
-			"side":     map[string]any{"type": "string", "enum": []string{"home", "away"}},
-		})),
+func winnersSchema(rationale bool) map[string]any {
+	req, props := withRationale(rationale, []string{"matchNum", "side"}, map[string]any{
+		"matchNum": intSchema(),
+		"side":     map[string]any{"type": "string", "enum": []string{"home", "away"}},
 	})
+	return obj([]string{"winners"}, map[string]any{"winners": arr(obj(req, props))})
 }
 
-func tipsSchema() map[string]any {
-	return obj([]string{"tips"}, map[string]any{
-		"tips": arr(obj([]string{"key", "home", "away"}, map[string]any{
-			"key":  strSchema(),
+func tipsSchema(rationale bool) map[string]any {
+	req, props := withRationale(rationale, []string{"key", "scores"}, map[string]any{
+		"key": strSchema(),
+		"scores": arr(obj([]string{"home", "away", "p"}, map[string]any{
 			"home": intSchema(),
 			"away": intSchema(),
+			"p":    numSchema(),
 		})),
 	})
+	return obj([]string{"tips"}, map[string]any{"tips": arr(obj(req, props))})
 }
 
 // ---- forecast: group standings + best thirds ----
@@ -177,17 +192,21 @@ func (b *Brain) PredictGroups(ctx context.Context, groups []groupPick) (map[stri
 
 	var resp struct {
 		Groups []struct {
-			Letter  string   `json:"letter"`
-			TeamIDs []string `json:"teamIds"`
+			Letter    string   `json:"letter"`
+			TeamIDs   []string `json:"teamIds"`
+			Rationale string   `json:"rationale"`
 		} `json:"groups"`
 		BestThirds []string `json:"bestThirds"`
 	}
-	if err := b.completeStructured(ctx, "groups", sb.String(), groupsSchema(), &resp); err != nil {
+	if err := b.completeStructured(ctx, "groups", sb.String(), groupsSchema(b.rationale), &resp); err != nil {
 		return nil, nil, err
 	}
 	order := make(map[string][]string, len(resp.Groups))
 	for _, g := range resp.Groups {
 		order[g.Letter] = g.TeamIDs
+		if g.Rationale != "" {
+			b.log.Info("group_pick", "group", g.Letter, "rationale", g.Rationale)
+		}
 	}
 	return order, resp.BestThirds, nil
 }
@@ -213,16 +232,20 @@ func (b *Brain) PredictWinners(ctx context.Context, stageLabel string, ms []matc
 
 	var resp struct {
 		Winners []struct {
-			MatchNum int    `json:"matchNum"`
-			Side     string `json:"side"`
+			MatchNum  int    `json:"matchNum"`
+			Side      string `json:"side"`
+			Rationale string `json:"rationale"`
 		} `json:"winners"`
 	}
-	if err := b.completeStructured(ctx, "winners", sb.String(), winnersSchema(), &resp); err != nil {
+	if err := b.completeStructured(ctx, "winners", sb.String(), winnersSchema(b.rationale), &resp); err != nil {
 		return nil, err
 	}
 	side := make(map[int]string, len(resp.Winners))
 	for _, w := range resp.Winners {
 		side[w.MatchNum] = strings.ToLower(strings.TrimSpace(w.Side))
+		if w.Rationale != "" {
+			b.log.Info("winner_pick", "match_num", w.MatchNum, "side", side[w.MatchNum], "rationale", w.Rationale)
+		}
 	}
 	out := map[int]string{}
 	for _, m := range ms {
@@ -249,9 +272,10 @@ type tipTarget struct {
 
 type Scoreline struct{ Home, Away int }
 
-// PredictTips asks Claude for a scoreline for each upcoming match. Knockout
-// matches are constrained to a decisive 90' result (no draw).
-func (b *Brain) PredictTips(ctx context.Context, targets []tipTarget) (map[string]Scoreline, error) {
+// PredictTips asks Claude for a candidate-score distribution per upcoming match.
+// Group matches may draw; knockout candidates should be decisive. The shared
+// selectTip turns each distribution into the points-maximizing concrete scoreline.
+func (b *Brain) PredictTips(ctx context.Context, targets []tipTarget) (map[string]TipOutcome, error) {
 	// Stable ordering keeps the user prompt deterministic across runs.
 	sort.Slice(targets, func(i, j int) bool { return targets[i].MatchID < targets[j].MatchID })
 
@@ -261,8 +285,8 @@ func (b *Brain) PredictTips(ctx context.Context, targets []tipTarget) (map[strin
 		sb.WriteString(b.results)
 		sb.WriteString("\n\n")
 	}
-	sb.WriteString("Predict the final score of each upcoming match. ")
-	sb.WriteString("For group matches a draw is allowed. For knockout matches pick a DECISIVE 90-minute score (the two scores must differ — the higher score is the team that advances).\n\n")
+	sb.WriteString("For each upcoming match, give 3–5 candidate final scorelines with your probability for each (your subjective chance; the probabilities you list should sum to about 1). ")
+	sb.WriteString("For group matches a draw is allowed; for knockout matches give DECISIVE scores only (the two scores differ — the higher score advances).\n\n")
 	for _, t := range targets {
 		kind := "group"
 		if t.Stage != "group" {
@@ -270,40 +294,34 @@ func (b *Brain) PredictTips(ctx context.Context, targets []tipTarget) (map[strin
 		}
 		fmt.Fprintf(&sb, "key=%s [%s] %s vs %s (kickoff %s)\n", t.MatchID, kind, t.Home, t.Away, t.Kickoff)
 	}
-	sb.WriteString("\nFor each match return {key, home, away} — the key given above and your predicted home/away goals.")
+	sb.WriteString("\nFor each match return {key, scores:[{home,away,p}, …]} using the key given above.")
+	if b.rationale {
+		sb.WriteString(" Include a one-sentence rationale per match.")
+	}
 
 	var resp struct {
 		Tips []struct {
-			Key  string `json:"key"`
-			Home int    `json:"home"`
-			Away int    `json:"away"`
+			Key    string `json:"key"`
+			Scores []struct {
+				Home int     `json:"home"`
+				Away int     `json:"away"`
+				P    float64 `json:"p"`
+			} `json:"scores"`
+			Rationale string `json:"rationale"`
 		} `json:"tips"`
 	}
-	if err := b.completeStructured(ctx, "tips", sb.String(), tipsSchema(), &resp); err != nil {
+	if err := b.completeStructured(ctx, "tips", sb.String(), tipsSchema(b.rationale), &resp); err != nil {
 		return nil, err
 	}
-	byKey := make(map[string]Scoreline, len(resp.Tips))
-	for _, v := range resp.Tips {
-		byKey[v.Key] = Scoreline{Home: v.Home, Away: v.Away}
-	}
-	out := map[string]Scoreline{}
-	for _, t := range targets {
-		s, ok := byKey[t.MatchID]
-		if !ok {
-			continue
+	// Pass the raw distribution through; selectTip does the clamping, knockout
+	// draw-removal, and points-maximizing pick (the semantic safety net).
+	out := make(map[string]TipOutcome, len(resp.Tips))
+	for _, t := range resp.Tips {
+		o := TipOutcome{Rationale: t.Rationale}
+		for _, s := range t.Scores {
+			o.Scores = append(o.Scores, ScoreProb{Home: s.Home, Away: s.Away, P: s.P})
 		}
-		h, a := s.Home, s.Away
-		if h < 0 {
-			h = 0
-		}
-		if a < 0 {
-			a = 0
-		}
-		// Knockouts must be decisive; coerce a predicted draw to a home edge.
-		if t.Stage != "group" && h == a {
-			h++
-		}
-		out[t.MatchID] = Scoreline{Home: h, Away: a}
+		out[t.Key] = o
 	}
 	return out, nil
 }

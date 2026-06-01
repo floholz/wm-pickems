@@ -90,13 +90,14 @@ func TestAlgoTips(t *testing.T) {
 		{MatchID: "f", Stage: "group", HomeID: "arg", AwayID: "nzl"}, // big favourite home
 		{MatchID: "k", Stage: "R16", HomeID: "xx1", AwayID: "xx2"},   // equal, knockout
 	})
-	if got["g"] != (Scoreline{Home: 1, Away: 1}) {
-		t.Errorf("equal group tip = %v, want 1-1", got["g"])
+	// The algo returns a degenerate distribution (one candidate at p=1).
+	if s := got["g"].Scores[0]; s.Home != 1 || s.Away != 1 {
+		t.Errorf("equal group tip = %d-%d, want 1-1", s.Home, s.Away)
 	}
-	if got["f"].Home <= got["f"].Away {
-		t.Errorf("favourite tip = %v, want home > away", got["f"])
+	if s := got["f"].Scores[0]; s.Home <= s.Away {
+		t.Errorf("favourite tip = %d-%d, want home > away", s.Home, s.Away)
 	}
-	if got["k"].Home == got["k"].Away {
-		t.Errorf("knockout tip = %v, must be decisive (no draw)", got["k"])
+	if s := got["k"].Scores[0]; s.Home == s.Away {
+		t.Errorf("knockout tip = %d-%d, must be decisive (no draw)", s.Home, s.Away)
 	}
 }

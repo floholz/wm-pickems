@@ -9,15 +9,17 @@ import (
 // and rejects dynamic-keyed maps. These guard against schema typos that the API
 // would otherwise reject at call time.
 func TestSchemasValid(t *testing.T) {
-	for name, s := range map[string]map[string]any{
-		"groups":  groupsSchema(),
-		"winners": winnersSchema(),
-		"tips":    tipsSchema(),
-	} {
-		if _, err := json.Marshal(s); err != nil {
-			t.Fatalf("%s schema not serializable: %v", name, err)
+	for _, rationale := range []bool{false, true} {
+		for name, s := range map[string]map[string]any{
+			"groups":  groupsSchema(rationale),
+			"winners": winnersSchema(rationale),
+			"tips":    tipsSchema(rationale),
+		} {
+			if _, err := json.Marshal(s); err != nil {
+				t.Fatalf("%s schema (rationale=%v) not serializable: %v", name, rationale, err)
+			}
+			assertClosedObjects(t, name, s)
 		}
-		assertClosedObjects(t, name, s)
 	}
 }
 

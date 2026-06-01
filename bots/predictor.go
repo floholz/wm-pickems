@@ -12,6 +12,7 @@ type Predictor interface {
 	// PredictWinners picks the advancing team id for each resolved knockout
 	// matchup (by match number).
 	PredictWinners(ctx context.Context, stageLabel string, ms []matchup) (map[int]string, error)
-	// PredictTips returns a scoreline per match (keyed by match id).
-	PredictTips(ctx context.Context, targets []tipTarget) (map[string]Scoreline, error)
+	// PredictTips returns an outcome distribution per match (keyed by match id);
+	// the shared selectTip turns each into a concrete scoreline.
+	PredictTips(ctx context.Context, targets []tipTarget) (map[string]TipOutcome, error)
 }
