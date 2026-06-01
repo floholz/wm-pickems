@@ -172,7 +172,11 @@ level=INFO msg=tip action=created match=<id> new=2-0 trigger=first_tip
 
 ---
 
-## Thread 4 — Prompt content
+## Thread 4 — Prompt content (✅ IMPLEMENTED)
+
+> **Done — static (cached `buildReference`):** added a "How to predict" block (weigh strength/pedigree/FIFA ranking + in-tournament form/standings), the **injury/squad fabrication guard**, the **home/away = nominal slot** clarification (only host nations USA/CAN/MEX have real advantage), and matchday-character guidance.
+> **Done — dynamic (user turn, group-stage only):** `groupMatchdays` derives MD1–3 from kickoff order → `tipTarget.Matchday` → tips prompt tags group games `[group MD2]`. `buildStandings` renders a compact per-group table (pts / GD / GF / played) from finished group matches, appended to the context block; empty before any group result. `buildResultsText` enriched with a header + per-result `[stage]` tag, ordered oldest-first. All dynamic content stays in the user turn (caching intact). Build/vet/tests green; package doc + this plan updated.
+
 
 ### 4.1 Signal buckets (what the bot can actually use)
 

@@ -12,6 +12,8 @@
 //	ANTHROPIC_API_KEY   Anthropic API key   (required for BOT_KIND=claude)
 //	CLAUDE_MODEL    model id (claude only) (default claude-opus-4-8)
 //	BOT_LEAGUE_CODE optional invite code to auto-join on start
+//	BOT_RATIONALE   ask for + log a one-line reason per prediction (claude only)
+//	LOG_FORMAT      log output: text (default) | json
 //
 // Provision the bot once in the PocketBase admin: create the user, set
 // role=bot / botKind to match BOT_KIND, and add it to your leagues (or set
@@ -175,7 +177,14 @@ func runOnce(cfg config) error {
 		predictor = NewAlgoBrain(teams, finished)
 		log.Info("strategy selected", "strategy", "algo", "results_applied", len(finished))
 	default:
-		predictor = NewBrain(cfg.model, buildReference(teams, structure), buildResultsText(finished, teamName), cfg.rationale, log)
+		ctxText := buildResultsText(finished, teamName)
+		if st := buildStandings(finished, structure, teamName); st != "" {
+			if ctxText != "" {
+				ctxText += "\n"
+			}
+			ctxText += st
+		}
+		predictor = NewBrain(cfg.model, buildReference(teams, structure), ctxText, cfg.rationale, log)
 		log.Info("strategy selected", "strategy", "claude", "model", cfg.model, "results_in_context", len(finished))
 	}
 
@@ -196,6 +205,11 @@ func buildReference(teams []Team, s *Structure) string {
 	var sb strings.Builder
 	sb.WriteString("You are Claude, competing as a player in a FIFA World Cup 2026 prediction game against human friends. ")
 	sb.WriteString("Make your best, realistic predictions using your football knowledge. Always answer with exactly the JSON the task asks for and nothing else.\n\n")
+
+	sb.WriteString("How to predict: weigh each team's historical strength, squad pedigree, and FIFA ranking, plus — once results exist — the in-tournament form and group standings shown in the task. ")
+	sb.WriteString("You have NO live squad, lineup, injury, or suspension data; do not invent or assume specific player availability — base predictions on team strength and observed results. ")
+	sb.WriteString("Fixture home/away positions are nominal slots, not venues: do not infer a home advantage from them. The only genuine host advantage belongs to the host nations (USA, Canada, Mexico). ")
+	sb.WriteString("Group matchdays differ in character — a side already through may rotate, a side needing a result will chase it — so factor the matchday and current standings into group games.\n\n")
 
 	sb.WriteString("TEAMS (id — name [FIFA code]):\n")
 	for _, t := range teams {
@@ -365,6 +379,7 @@ func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match,
 	}
 	hasNewInfo := lastResult.After(lastTipped)
 
+	matchday := groupMatchdays(matches)
 	var targets []tipTarget
 	for _, m := range matches {
 		ko, ok := kickoffTime(m.Kickoff)
@@ -382,7 +397,8 @@ func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match,
 			Home:   labelFor(m.HomeTeam, m.HomeLabel, teamName),
 			Away:   labelFor(m.AwayTeam, m.AwayLabel, teamName),
 			HomeID: m.HomeTeam, AwayID: m.AwayTeam,
-			Kickoff: m.Kickoff,
+			Kickoff:  m.Kickoff,
+			Matchday: matchday[m.ID],
 		})
 	}
 	if len(targets) == 0 {
@@ -460,14 +476,120 @@ func buildResultsText(finished []Match, teamName map[string]string) string {
 	ms := append([]Match(nil), finished...)
 	sort.SliceStable(ms, func(i, j int) bool { return ms[i].Kickoff < ms[j].Kickoff })
 	var sb strings.Builder
+	sb.WriteString("Results so far (oldest first):\n")
 	for _, m := range ms {
 		h, a := m.FtHome, m.FtAway
 		if m.EtHome > 0 || m.EtAway > 0 {
 			h, a = m.EtHome, m.EtAway
 		}
-		fmt.Fprintf(&sb, "%s %d-%d %s\n", teamName[m.HomeTeam], h, a, teamName[m.AwayTeam])
+		fmt.Fprintf(&sb, "[%s] %s %d-%d %s\n", m.Stage, teamName[m.HomeTeam], h, a, teamName[m.AwayTeam])
 	}
 	return sb.String()
+}
+
+// buildStandings renders a compact current group table (points, goal diff, goals
+// for, played) per group, computed from finished group matches — the in-context
+// "where each group stands" signal. Returns "" before any group result. This is
+// derived from data the bot already pulls; no full FIFA tiebreaker resolution,
+// just enough for the model to see who's through, chasing, or out.
+func buildStandings(finished []Match, s *Structure, teamName map[string]string) string {
+	type stat struct{ pts, gf, ga, pld int }
+	byGroup := make(map[string]map[string]*stat, len(s.Groups))
+	for _, g := range s.Groups {
+		byGroup[g.Letter] = map[string]*stat{}
+		for _, id := range g.Teams {
+			byGroup[g.Letter][id] = &stat{}
+		}
+	}
+	any := false
+	for _, m := range finished {
+		if m.Stage != "group" {
+			continue
+		}
+		grp := byGroup[m.GroupLetter]
+		h, a := grp[m.HomeTeam], grp[m.AwayTeam]
+		if h == nil || a == nil {
+			continue
+		}
+		any = true
+		h.pld, a.pld = h.pld+1, a.pld+1
+		h.gf, h.ga = h.gf+m.FtHome, h.ga+m.FtAway
+		a.gf, a.ga = a.gf+m.FtAway, a.ga+m.FtHome
+		switch {
+		case m.FtHome > m.FtAway:
+			h.pts += 3
+		case m.FtAway > m.FtHome:
+			a.pts += 3
+		default:
+			h.pts, a.pts = h.pts+1, a.pts+1
+		}
+	}
+	if !any {
+		return ""
+	}
+	letters := make([]string, 0, len(byGroup))
+	for l := range byGroup {
+		letters = append(letters, l)
+	}
+	sort.Strings(letters)
+	var sb strings.Builder
+	sb.WriteString("Current group standings (played so far):\n")
+	for _, l := range letters {
+		type row struct {
+			id string
+			s  *stat
+		}
+		var rows []row
+		played := false
+		for id, st := range byGroup[l] {
+			rows = append(rows, row{id, st})
+			if st.pld > 0 {
+				played = true
+			}
+		}
+		if !played {
+			continue
+		}
+		sort.Slice(rows, func(i, j int) bool {
+			a, b := rows[i].s, rows[j].s
+			if a.pts != b.pts {
+				return a.pts > b.pts
+			}
+			if da, db := a.gf-a.ga, b.gf-b.ga; da != db {
+				return da > db
+			}
+			if a.gf != b.gf {
+				return a.gf > b.gf
+			}
+			return rows[i].id < rows[j].id
+		})
+		parts := make([]string, len(rows))
+		for i, r := range rows {
+			parts[i] = fmt.Sprintf("%s %dpts (%+d, %dgf, %dpld)", teamName[r.id], r.s.pts, r.s.gf-r.s.ga, r.s.gf, r.s.pld)
+		}
+		fmt.Fprintf(&sb, "Group %s: %s\n", l, strings.Join(parts, "; "))
+	}
+	return sb.String()
+}
+
+// groupMatchdays derives the matchday (1–3) of each group match from kickoff order
+// within its group — a group's six matches cluster into three matchday pairs
+// (matchday-3 games kick off simultaneously), so kickoff-ordering is robust.
+func groupMatchdays(matches []Match) map[string]int {
+	byGroup := map[string][]Match{}
+	for _, m := range matches {
+		if m.Stage == "group" {
+			byGroup[m.GroupLetter] = append(byGroup[m.GroupLetter], m)
+		}
+	}
+	out := map[string]int{}
+	for _, ms := range byGroup {
+		sort.SliceStable(ms, func(i, j int) bool { return ms[i].Kickoff < ms[j].Kickoff })
+		for i, m := range ms {
+			out[m.ID] = i/2 + 1
+		}
+	}
+	return out
 }
 
 // labelFor names a side:: the resolved team name if known, else the placeholder

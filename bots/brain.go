@@ -261,13 +261,14 @@ func (b *Brain) PredictWinners(ctx context.Context, stageLabel string, ms []matc
 // ---- tips: per-match scorelines ----
 
 type tipTarget struct {
-	MatchID string
-	Stage   string
-	Home    string // display name (or placeholder label)
-	Away    string
-	HomeID  string // resolved team id (always set for tippable matches)
-	AwayID  string
-	Kickoff string
+	MatchID  string
+	Stage    string
+	Home     string // display name (or placeholder label)
+	Away     string
+	HomeID   string // resolved team id (always set for tippable matches)
+	AwayID   string
+	Kickoff  string
+	Matchday int // 1-3 for group matches (derived from kickoff order); 0 otherwise
 }
 
 type Scoreline struct{ Home, Away int }
@@ -281,18 +282,22 @@ func (b *Brain) PredictTips(ctx context.Context, targets []tipTarget) (map[strin
 
 	var sb strings.Builder
 	if b.results != "" {
-		sb.WriteString("Results so far this tournament — factor these in (form, surprises) and revise your view as needed:\n")
+		sb.WriteString("Tournament context so far — factor this into form and matchups, and revise as needed:\n")
 		sb.WriteString(b.results)
-		sb.WriteString("\n\n")
+		sb.WriteString("\n")
 	}
 	sb.WriteString("For each upcoming match, give 3–5 candidate final scorelines with your probability for each (your subjective chance; the probabilities you list should sum to about 1). ")
 	sb.WriteString("For group matches a draw is allowed; for knockout matches give DECISIVE scores only (the two scores differ — the higher score advances).\n\n")
 	for _, t := range targets {
-		kind := "group"
-		if t.Stage != "group" {
-			kind = "knockout"
+		tag := "knockout"
+		if t.Stage == "group" {
+			if t.Matchday > 0 {
+				tag = fmt.Sprintf("group MD%d", t.Matchday)
+			} else {
+				tag = "group"
+			}
 		}
-		fmt.Fprintf(&sb, "key=%s [%s] %s vs %s (kickoff %s)\n", t.MatchID, kind, t.Home, t.Away, t.Kickoff)
+		fmt.Fprintf(&sb, "key=%s [%s] %s vs %s (kickoff %s)\n", t.MatchID, tag, t.Home, t.Away, t.Kickoff)
 	}
 	sb.WriteString("\nFor each match return {key, scores:[{home,away,p}, …]} using the key given above.")
 	if b.rationale {
