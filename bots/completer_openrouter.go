@@ -24,12 +24,17 @@ import (
 // It's a hand-rolled HTTP client rather than a vendored SDK: OpenRouter is a
 // single, stable endpoint, and this keeps the module lean (the same approach as
 // client.go for the wm-pickems API).
+//
+// Not every provider honors strict json_schema. When the strict path fails, the
+// completer degrades (via degrade()) to JSON mode with the schema moved into the
+// prompt — the DeepSeek/Grok/Kimi fallback.
 type openrouterCompleter struct {
-	http   *http.Client
-	apiKey string
-	model  string // OpenRouter model id, e.g. "openai/gpt-5.1", "google/gemini-2.5-pro"
-	system string // static reference, identical across all calls (cache prefix)
-	log    *slog.Logger
+	http     *http.Client
+	apiKey   string
+	model    string // OpenRouter model id, e.g. "openai/gpt-5.1", "google/gemini-2.5-pro"
+	system   string // static reference, identical across all calls (cache prefix)
+	log      *slog.Logger
+	jsonOnly bool // sticky: this model rejected strict json_schema, so use JSON mode
 }
 
 const openrouterURL = "https://openrouter.ai/api/v1/chat/completions"
@@ -52,27 +57,7 @@ func newOpenRouterCompleter(model, system string, log *slog.Logger) (*openrouter
 
 func (o *openrouterCompleter) complete(ctx context.Context, label, task string, schema map[string]any) (string, error) {
 	start := time.Now()
-	body := map[string]any{
-		"model": o.model,
-		"messages": []map[string]string{
-			{"role": "system", "content": o.system},
-			{"role": "user", "content": task},
-		},
-		"max_tokens": 32000,
-		// Strict json_schema is the OpenAI-compatible equivalent of Anthropic's
-		// OutputConfig: the Tier-1 providers return JSON matching the schema with
-		// no fences/preamble. (DeepSeek/Kimi support is spottier — that's the
-		// later JSON-mode + retry fallback, not this path.)
-		"response_format": map[string]any{
-			"type": "json_schema",
-			"json_schema": map[string]any{
-				"name":   "prediction",
-				"strict": true,
-				"schema": schema,
-			},
-		},
-	}
-	b, err := json.Marshal(body)
+	b, err := json.Marshal(o.requestBody(task, schema))
 	if err != nil {
 		return "", err
 	}
@@ -122,6 +107,71 @@ func (o *openrouterCompleter) complete(ctx context.Context, label, task string, 
 		"dur_ms", time.Since(start).Milliseconds(),
 	)
 	return out.Choices[0].Message.Content, nil
+}
+
+// requestBody builds the chat-completion payload for the current structured-output
+// mode. The strict path (default) sets response_format to a strict json_schema —
+// the OpenAI-compatible equivalent of Anthropic's OutputConfig, honored cleanly by
+// the Tier-1 providers (Claude/GPT/Gemini). The degraded path (after degrade())
+// uses plain JSON mode and moves the schema into the prompt, so providers that
+// don't support strict json_schema (DeepSeek/Grok/Kimi) can still produce the
+// right shape.
+func (o *openrouterCompleter) requestBody(task string, schema map[string]any) map[string]any {
+	messages := []map[string]string{
+		{"role": "system", "content": o.system},
+		{"role": "user", "content": task},
+	}
+	var respFmt map[string]any
+	if o.jsonOnly {
+		// The literal lowercase "json" must appear in the prompt — OpenAI/DeepSeek
+		// JSON mode rejects the request otherwise.
+		messages[1]["content"] = task +
+			"\n\nReturn ONLY a json object — no prose, no markdown, no code fences — matching this JSON Schema:\n" +
+			schemaJSON(schema)
+		respFmt = map[string]any{"type": "json_object"}
+	} else {
+		respFmt = map[string]any{
+			"type": "json_schema",
+			"json_schema": map[string]any{
+				"name":   "prediction",
+				"strict": true,
+				"schema": schema,
+			},
+		}
+	}
+	return map[string]any{
+		"model":           o.model,
+		"messages":        messages,
+		"max_tokens":      32000,
+		"response_format": respFmt,
+	}
+}
+
+// degrade switches from strict json_schema to JSON mode (schema moved into the
+// prompt) for the rest of the run, and reports whether it actually switched —
+// false if already degraded, so the caller won't retry pointlessly. Sticky:
+// once a model has shown it can't do strict schema, every later call skips
+// straight to the looser mode instead of wasting a failed strict attempt first.
+func (o *openrouterCompleter) degrade() bool {
+	if o.jsonOnly {
+		return false
+	}
+	o.jsonOnly = true
+	o.log.Warn("structured-output fallback",
+		"model", o.model,
+		"mode", "json_object",
+		"note", "strict json_schema failed; using JSON mode for the rest of this run",
+	)
+	return true
+}
+
+// schemaJSON renders a schema for embedding in the prompt (the degraded path).
+func schemaJSON(schema map[string]any) string {
+	b, err := json.MarshalIndent(schema, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // openRouterResponse is the subset of the OpenAI-compatible chat-completion reply

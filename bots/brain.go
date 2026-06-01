@@ -37,17 +37,72 @@ type completer interface {
 	complete(ctx context.Context, label, task string, schema map[string]any) (string, error)
 }
 
-// completeStructured runs one completer call with a JSON-schema constraint and
-// unmarshals the (schema-guaranteed valid) reply into out.
+// fallbackCompleter is an optional capability: a completer that can degrade its
+// structured-output strategy when the strict json_schema path fails (an HTTP
+// error, or a reply that won't parse). Only openrouterCompleter implements it —
+// for the spottier providers (DeepSeek/Grok/Kimi); the native Anthropic
+// transport always honors json_schema, so it doesn't need to.
+type fallbackCompleter interface {
+	completer
+	// degrade switches to the looser mode (JSON mode + schema in the prompt) and
+	// returns true if a switch happened — false if already degraded.
+	degrade() bool
+}
+
+// completeStructured runs one completer call constrained to schema and unmarshals
+// the reply into out. The Tier-1 providers (Claude/GPT/Gemini) honor strict
+// json_schema, so the first attempt parses cleanly. For the spottier providers,
+// the first attempt may HTTP-error (schema unsupported) or return JSON that won't
+// parse; if the transport can degrade to a looser mode, we switch and retry once.
+// extractJSON unwraps any code-fenced/prefixed reply, and the downstream repair
+// logic (repairOrder/chooseThirds/selectTip) is the final safety net.
 func (b *Brain) completeStructured(ctx context.Context, label, task string, schema map[string]any, out any) error {
 	raw, err := b.comp.complete(ctx, label, task, schema)
-	if err != nil {
-		return err
+	if err == nil {
+		err = json.Unmarshal([]byte(extractJSON(raw)), out)
+		if err == nil {
+			return nil
+		}
+		err = fmt.Errorf("not valid JSON: %w; got %.200q", err, strings.TrimSpace(raw))
 	}
-	if err := json.Unmarshal([]byte(raw), out); err != nil {
-		return fmt.Errorf("structured output for %s not valid JSON: %w; got %.200q", label, err, strings.TrimSpace(raw))
+	// First attempt failed. If the transport can degrade its structured-output
+	// strategy, switch to the looser mode and retry once.
+	fb, ok := b.comp.(fallbackCompleter)
+	if !ok || !fb.degrade() {
+		return fmt.Errorf("structured output for %s: %w", label, err)
+	}
+	raw, err = b.comp.complete(ctx, label, task, schema)
+	if err != nil {
+		return fmt.Errorf("structured output for %s (after fallback): %w", label, err)
+	}
+	if err := json.Unmarshal([]byte(extractJSON(raw)), out); err != nil {
+		return fmt.Errorf("structured output for %s not valid JSON after fallback: %w; got %.200q", label, err, strings.TrimSpace(raw))
 	}
 	return nil
+}
+
+// extractJSON best-effort-unwraps a JSON object from a model reply: it trims
+// whitespace, strips a ```json … ``` code fence, and otherwise falls back to the
+// span from the first "{" to the last "}". Clean JSON (the strict-schema path)
+// passes through unchanged; this only rescues the looser JSON-mode replies.
+func extractJSON(s string) string {
+	s = strings.TrimSpace(s)
+	if rest, ok := strings.CutPrefix(s, "```"); ok {
+		rest = strings.TrimPrefix(rest, "json")
+		rest = strings.TrimPrefix(rest, "JSON")
+		if i := strings.LastIndex(rest, "```"); i >= 0 {
+			rest = rest[:i]
+		}
+		s = strings.TrimSpace(rest)
+	}
+	if !strings.HasPrefix(s, "{") {
+		if i := strings.Index(s, "{"); i >= 0 {
+			if j := strings.LastIndex(s, "}"); j > i {
+				s = s[i : j+1]
+			}
+		}
+	}
+	return s
 }
 
 // ---- JSON schema helpers (Structured Outputs) ----

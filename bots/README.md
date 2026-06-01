@@ -45,6 +45,8 @@ Both LLM strategies share one `Brain` (`brain.go`) that owns everything provider
 
 So adding a provider is just a different completer; the prompts, schemas, and downstream repair logic (`repairOrder`/`chooseThirds`/`selectTip`) are identical and act as a safety net regardless of which model answers.
 
+**Structured-output tiers.** The Tier-1 providers (Claude, GPT, Gemini) honor strict `json_schema`, so the reply parses directly. The spottier providers (DeepSeek, Grok, Kimi) don't reliably support it — so when a strict attempt fails (an HTTP error, or a reply that won't parse), the OpenRouter transport **degrades** to plain JSON mode with the schema moved into the prompt, and retries once. The downgrade is sticky per run (once a model proves it can't do strict schema, later calls skip straight to JSON mode), and `extractJSON` unwraps any code-fenced/prose-wrapped reply before parsing.
+
 `CLAUDE_MODEL` (claude only) accepts any chat model (default `claude-opus-4-8`). Opus 4.6+/Sonnet 4.6 run with adaptive thinking; `claude-haiku-4-5` has no adaptive thinking, so it runs with thinking omitted — handy as a cheaper/faster model for dev. `OPENROUTER_MODEL` (openrouter only, required) is an OpenRouter model id like `openai/gpt-5.1` or `google/gemini-2.5-pro`.
 
 ## Setup
@@ -142,4 +144,6 @@ go test ./...
 
 ## Future
 
-GPT, Gemini, and others already run today via `BOT_KIND=openrouter` (Tier-1 providers with strict structured-output support). Next up: a JSON-mode + retry fallback in the completer so the spottier models (DeepSeek, Grok, Kimi) can play too. Showing each bot's reasoning in the app UI is partially done (the `rationale` field is persisted; richer display is a follow-up).
+Claude, GPT, Gemini, DeepSeek, Grok, and Kimi all run today via `BOT_KIND=openrouter` — the first three on strict `json_schema`, the rest through the JSON-mode fallback. Showing each bot's reasoning in the app UI is partially done (the `rationale` field is persisted; richer display is a follow-up).
+
+> **Heads-up on model availability.** OpenRouter routes per your account's model allowlist and the data-policy/privacy settings at <https://openrouter.ai/settings/privacy>. A `404 No endpoints available matching your guardrail restrictions and data policy` means the chosen model isn't allowed on your key, or every eligible endpoint needs a data policy you haven't enabled — common with free/preview model ids. Fix it by allowing the model on the key, relaxing the privacy toggle, or picking a GA model id.

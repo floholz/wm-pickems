@@ -49,7 +49,7 @@ services:
     image: wm-pickems/bot:latest
     container_name: wmp_bot_claude
     restart: unless-stopped
-    env_file: .claude.env # ...BOT_KIND=openrouter, OPENROUTER_API_KEY, OPENROUTER_MODEL=google/gemini-2.5-pro
+    env_file: .claude.env
     command: ["--loop", "--interval=1h"]
     networks: [wmpickems]
     depends_on: [elo]
@@ -58,7 +58,34 @@ services:
     image: wm-pickems/bot:latest
     container_name: wmp_bot_gpt
     restart: unless-stopped
-    env_file: .gpt.env # ...BOT_KIND=openrouter, OPENROUTER_API_KEY, OPENROUTER_MODEL=google/gemini-2.5-pro
+    env_file: .gpt.env
+    command: ["--loop", "--interval=1h"]
+    networks: [wmpickems]
+    depends_on: [elo]
+
+  deepseek:
+    image: wm-pickems/bot:latest
+    container_name: wmp_bot_deepseek
+    restart: unless-stopped
+    env_file: .deepseek.env
+    command: ["--loop", "--interval=1h"]
+    networks: [wmpickems]
+    depends_on: [elo]
+
+  grok:
+    image: wm-pickems/bot:latest
+    container_name: wmp_bot_grok
+    restart: unless-stopped
+    env_file: .grok.env
+    command: ["--loop", "--interval=1h"]
+    networks: [wmpickems]
+    depends_on: [elo]
+
+  kimi:
+    image: wm-pickems/bot:latest
+    container_name: wmp_bot_kimi
+    restart: unless-stopped
+    env_file: .kimi.env
     command: ["--loop", "--interval=1h"]
     networks: [wmpickems]
     depends_on: [elo]
