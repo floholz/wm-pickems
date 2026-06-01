@@ -43,12 +43,22 @@ func NewBrain(model, reference, results string, rationale bool, log *slog.Logger
 // the text is guaranteed valid JSON matching it (no fences/preamble to strip).
 // The schema sits in OutputConfig (not the cached system prefix), so caching is
 // unaffected.
+// adaptiveThinking returns the adaptive-thinking config for models that support
+// it (Opus 4.6+/Sonnet 4.6). Haiku 4.5 has no adaptive thinking — the API 400s —
+// so it runs with thinking omitted (fine, and cheaper/faster for dev runs).
+func adaptiveThinking(model string) anthropic.ThinkingConfigParamUnion {
+	if strings.Contains(strings.ToLower(model), "haiku") {
+		return anthropic.ThinkingConfigParamUnion{} // omitted
+	}
+	return anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}}
+}
+
 func (b *Brain) complete(ctx context.Context, label, task string, schema map[string]any) (string, error) {
 	start := time.Now()
 	stream := b.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(b.model),
 		MaxTokens: 32000,
-		Thinking:  anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}},
+		Thinking:  adaptiveThinking(b.model),
 		System: []anthropic.TextBlockParam{{
 			Text:         b.system,
 			CacheControl: anthropic.NewCacheControlEphemeralParam(),

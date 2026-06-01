@@ -35,6 +35,8 @@ It then reconciles **every still-open match**: creating missing tips and **updat
 
 The large, unchanging tournament reference (teams, groups, knockout skeleton) is sent as a **cached system prompt**, so every prediction call after the first reuses it as a prompt-cache prefix.
 
+`CLAUDE_MODEL` accepts any chat model (default `claude-opus-4-8`). Opus 4.6+/Sonnet 4.6 run with adaptive thinking; `claude-haiku-4-5` has no adaptive thinking, so it runs with thinking omitted — handy as a cheaper/faster model for dev.
+
 ## Setup
 
 1. In the PocketBase admin, create the bot's user account, set `role=bot` and `botKind` (`claude` or `algo`), and add it to your league(s) — or set `BOT_LEAGUE_CODE`.
