@@ -143,7 +143,11 @@ func main() {
 }
 
 func runOnce(cfg config) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	// Backstop for the whole run; well under the 1h loop interval. The forecast
+	// (one-time, ~7 calls) and tips each stay well within this in practice, and
+	// submitTips bounds each batch separately (tipBatchTimeout) so a slow batch
+	// can't starve the rest.
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 	defer cancel()
 
 	// run_id correlates every event from this run; bot_kind is already on the default logger.
@@ -364,7 +368,10 @@ func chooseThirds(order map[string][]string, raw []string) map[string]string {
 	return thirds
 }
 
-const tipBatch = 40
+const (
+	tipBatch        = 24
+	tipBatchTimeout = 10 * time.Minute
+)
 
 func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match, teamName map[string]string, log *slog.Logger) error {
 	now, err := c.Now(ctx)
@@ -425,13 +432,20 @@ func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match,
 	}
 	log.Info("tips: evaluating open matches", "count", len(targets), "has_new_info", hasNewInfo)
 
-	created, updated := 0, 0
+	created, updated, failedMatches, failedBatches := 0, 0, 0, 0
 	for start := 0; start < len(targets); start += tipBatch {
 		end := min(start+tipBatch, len(targets))
 		batch := targets[start:end]
-		outcomes, err := pred.PredictTips(ctx, batch)
+		bctx, cancel := context.WithTimeout(ctx, tipBatchTimeout)
+		outcomes, err := pred.PredictTips(bctx, batch)
+		cancel()
 		if err != nil {
-			return fmt.Errorf("predict tips: %w", err)
+			// Skip this batch but keep going: tips from earlier batches are already
+			// saved, and the next run (or a SIGUSR1 trigger) retries whatever's left.
+			failedMatches += len(batch)
+			failedBatches++
+			log.Warn("tip batch failed; continuing", "from", start, "n", len(batch), "err", err)
+			continue
 		}
 		for _, t := range batch {
 			o, ok := outcomes[t.MatchID]
@@ -461,7 +475,10 @@ func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match,
 			}
 		}
 	}
-	log.Info("tips submitted", "created", created, "revised", updated)
+	log.Info("tips submitted", "created", created, "revised", updated, "failed", failedMatches)
+	if failedBatches > 0 && created == 0 && updated == 0 {
+		return fmt.Errorf("no tips submitted: all %d batch(es) failed (%d matches)", failedBatches, failedMatches)
+	}
 	return nil
 }
 

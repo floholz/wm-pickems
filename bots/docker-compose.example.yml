@@ -13,7 +13,7 @@ services:
     container_name: wmp_bot_elo
     restart: unless-stopped
     env_file: .elo.env # BOT_EMAIL, BOT_PASSWORD, BOT_KIND=algo, WMP_BASE_URL, ...
-    command: ["--loop", "--interval=1m"]
+    command: ["--loop", "--interval=1h"]
     networks: [wmpickems]
 
   claude:
@@ -21,7 +21,7 @@ services:
     container_name: wmp_bot_claude
     restart: unless-stopped
     env_file: .claude.env # BOT_EMAIL, BOT_PASSWORD, ANTHROPIC_API_KEY, WMP_BASE_URL, ...
-    command: ["--loop", "--interval=1m"]
+    command: ["--loop", "--interval=1h"]
     networks: [wmpickems]
     depends_on: [elo]
 
