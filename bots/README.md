@@ -56,17 +56,17 @@ For a bot that's **already running in `--loop`** (the container default), send i
 
 | Signal | Effect |
 |---|---|
-| `SIGUSR1` | Run now (normal): tip new open matches + revise where a result changed since the last tip. |
-| `SIGUSR2` | Re-evaluate **all** open tips and override existing picks — use after retuning a brain (e.g. the algo ratings table or the Claude prompt). |
-| `SIGHUP`  | Regenerate the **forecast**, overriding the existing one. Pre-lock only — the server rejects forecast edits once the tournament starts. |
+| `SIGHUP`  | Run now (normal): tip new open matches + revise where a result changed since the last tip. |
+| `SIGUSR1` | Re-evaluate **all** open tips and override existing picks — use after retuning a brain (e.g. the algo ratings table or the Claude prompt). |
+| `SIGUSR2` | Regenerate the **forecast**, overriding the existing one. Pre-lock only — the server rejects forecast edits once the tournament starts. |
 
 ```sh
-kill -USR2 <pid>                               # re-tip, bare process
-docker kill --signal=SIGUSR2 wmp_bot_claude    # re-tip, docker run
-docker compose kill -s SIGHUP bot-claude       # re-forecast, compose service
+kill -USR1 <pid>                               # re-tip, bare process
+docker kill --signal=SIGUSR1 wmp_bot_claude    # re-tip, docker run
+docker compose kill -s SIGUSR2 bot-claude      # re-forecast, compose service
 ```
 
-`SIGUSR2`/`SIGHUP` only re-submit a pick where the new prediction actually differs from the saved one, so re-running after no change is a cheap no-op (aside from the LLM calls).
+`SIGUSR1`/`SIGUSR2` only re-submit a pick where the new prediction actually differs from the saved one, so re-running after no change is a cheap no-op (aside from the LLM calls).
 
 A fresh one-off against the deployment without touching the running loop (`--once` overrides the image's `--loop` default):
 

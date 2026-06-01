@@ -2,8 +2,8 @@
 // wm-pickems deployment as a bot user and submits a Forecast and per-match
 // Tips through the public REST API — playing by the same server-side locks as
 // any human. Run it once (cron) or with --loop; --once forces a single pass
-// (overrides --loop). In --loop mode, signals trigger work on demand: SIGUSR1 =
-// run now, SIGUSR2 = re-evaluate all tips (override picks), SIGHUP = regenerate
+// (overrides --loop). In --loop mode, signals trigger work on demand: SIGHUP =
+// run now, SIGUSR1 = re-evaluate all tips (override picks), SIGUSR2 = regenerate
 // the forecast (pre-lock only).
 //
 // Configuration is via environment:
@@ -130,29 +130,29 @@ func main() {
 	// be refreshed without waiting for the next tick or restarting. Send with
 	// `docker compose kill -s <SIG> <service>`, `docker kill --signal=<SIG> <name>`,
 	// or `kill -<SIG> <pid>`:
-	//   SIGUSR1 — run now (normal: new open matches + results-driven revisions)
-	//   SIGUSR2 — re-evaluate ALL open tips, overriding existing picks (after a brain change)
-	//   SIGHUP  — regenerate the forecast, overriding the existing one (pre-lock only)
+	//   SIGHUP  — run now (normal: new open matches + results-driven revisions)
+	//   SIGUSR1 — re-evaluate ALL open tips, overriding existing picks (after a brain change)
+	//   SIGUSR2 — regenerate the forecast, overriding the existing one (pre-lock only)
 	ticker := time.NewTicker(*interval)
 	defer ticker.Stop()
 	sigRun := make(chan os.Signal, 1)
 	sigReTip := make(chan os.Signal, 1)
 	sigReForecast := make(chan os.Signal, 1)
-	signal.Notify(sigRun, syscall.SIGUSR1)
-	signal.Notify(sigReTip, syscall.SIGUSR2)
-	signal.Notify(sigReForecast, syscall.SIGHUP)
+	signal.Notify(sigRun, syscall.SIGHUP)
+	signal.Notify(sigReTip, syscall.SIGUSR1)
+	signal.Notify(sigReForecast, syscall.SIGUSR2)
 	for {
 		select {
 		case <-ticker.C:
 			run(runOpts{})
 		case <-sigRun:
-			slog.Info("manual trigger (SIGUSR1) — running now")
+			slog.Info("manual trigger (SIGHUP) — running now")
 			run(runOpts{})
 		case <-sigReTip:
-			slog.Info("re-tip trigger (SIGUSR2) — re-evaluating all open tips")
+			slog.Info("re-tip trigger (SIGUSR1) — re-evaluating all open tips")
 			run(runOpts{forceTips: true})
 		case <-sigReForecast:
-			slog.Info("re-forecast trigger (SIGHUP) — regenerating forecast")
+			slog.Info("re-forecast trigger (SIGUSR2) — regenerating forecast")
 			run(runOpts{forceForecast: true})
 		}
 	}
