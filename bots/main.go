@@ -1,8 +1,10 @@
 // Command wm-pickems-bot is a standalone side project: it logs in to a
 // wm-pickems deployment as a bot user and submits a Forecast and per-match
 // Tips through the public REST API — playing by the same server-side locks as
-// any human. Run it once (cron) or with --loop; in --loop mode, SIGUSR1 triggers
-// an immediate run, and --once forces a single pass (overrides --loop).
+// any human. Run it once (cron) or with --loop; --once forces a single pass
+// (overrides --loop). In --loop mode, signals trigger work on demand: SIGUSR1 =
+// run now, SIGUSR2 = re-evaluate all tips (override picks), SIGHUP = regenerate
+// the forecast (pre-lock only).
 //
 // Configuration is via environment:
 //
@@ -114,35 +116,56 @@ func main() {
 	// bot_kind is process-constant — attach it to every line.
 	slog.SetDefault(slog.Default().With("bot_kind", cfg.kind))
 
-	run := func() {
-		if err := runOnce(cfg); err != nil {
+	run := func(opts runOpts) {
+		if err := runOnce(cfg, opts); err != nil {
 			slog.Error("run failed", "err", err)
 		}
 	}
-	run()
+	run(runOpts{})
 	if *once || !*loop {
 		return
 	}
 
-	// In loop mode, run on the interval — or immediately on SIGUSR1, so a run can
-	// be triggered on demand without waiting for the next tick or restarting
-	// (e.g. `docker compose kill -s SIGUSR1 <service>` or `kill -USR1 <pid>`).
+	// In loop mode, run on the interval — or on demand via signals, so picks can
+	// be refreshed without waiting for the next tick or restarting. Send with
+	// `docker compose kill -s <SIG> <service>`, `docker kill --signal=<SIG> <name>`,
+	// or `kill -<SIG> <pid>`:
+	//   SIGUSR1 — run now (normal: new open matches + results-driven revisions)
+	//   SIGUSR2 — re-evaluate ALL open tips, overriding existing picks (after a brain change)
+	//   SIGHUP  — regenerate the forecast, overriding the existing one (pre-lock only)
 	ticker := time.NewTicker(*interval)
 	defer ticker.Stop()
-	trigger := make(chan os.Signal, 1)
-	signal.Notify(trigger, syscall.SIGUSR1)
+	sigRun := make(chan os.Signal, 1)
+	sigReTip := make(chan os.Signal, 1)
+	sigReForecast := make(chan os.Signal, 1)
+	signal.Notify(sigRun, syscall.SIGUSR1)
+	signal.Notify(sigReTip, syscall.SIGUSR2)
+	signal.Notify(sigReForecast, syscall.SIGHUP)
 	for {
 		select {
 		case <-ticker.C:
-			run()
-		case <-trigger:
+			run(runOpts{})
+		case <-sigRun:
 			slog.Info("manual trigger (SIGUSR1) — running now")
-			run()
+			run(runOpts{})
+		case <-sigReTip:
+			slog.Info("re-tip trigger (SIGUSR2) — re-evaluating all open tips")
+			run(runOpts{forceTips: true})
+		case <-sigReForecast:
+			slog.Info("re-forecast trigger (SIGHUP) — regenerating forecast")
+			run(runOpts{forceForecast: true})
 		}
 	}
 }
 
-func runOnce(cfg config) error {
+// runOpts carries per-run overrides triggered by signals. The zero value is a
+// normal run (forecast only if missing; tips only for new/result-changed matches).
+type runOpts struct {
+	forceForecast bool // regenerate the forecast even if one exists (pre-lock only)
+	forceTips     bool // re-evaluate every open tip, ignoring the new-info gate
+}
+
+func runOnce(cfg config, opts runOpts) error {
 	// Backstop for the whole run; well under the 1h loop interval. The forecast
 	// (one-time, ~7 calls) and tips each stay well within this in practice, and
 	// submitTips bounds each batch separately (tipBatchTimeout) so a slow batch
@@ -210,10 +233,10 @@ func runOnce(cfg config) error {
 		log.Info("strategy selected", "strategy", "claude", "model", cfg.model, "results_in_context", len(finished))
 	}
 
-	if err := ensureForecast(ctx, c, predictor, structure, teamName, log); err != nil {
+	if err := ensureForecast(ctx, c, predictor, structure, teamName, log, opts.forceForecast); err != nil {
 		log.Error("forecast failed", "err", err)
 	}
-	if err := submitTips(ctx, c, predictor, matches, teamName, log); err != nil {
+	if err := submitTips(ctx, c, predictor, matches, teamName, log, opts.forceTips); err != nil {
 		log.Error("tips failed", "err", err)
 	}
 	return nil
@@ -255,16 +278,20 @@ func buildReference(teams []Team, s *Structure) string {
 	return sb.String()
 }
 
-func ensureForecast(ctx context.Context, c *Client, pred Predictor, s *Structure, teamName map[string]string, log *slog.Logger) error {
+func ensureForecast(ctx context.Context, c *Client, pred Predictor, s *Structure, teamName map[string]string, log *slog.Logger, force bool) error {
 	id, err := c.MyForecast(ctx)
 	if err != nil {
 		return err
 	}
-	if id != "" {
-		return nil // already forecast; one-time only
+	if id != "" && !force {
+		return nil // already forecast; one-time only (unless forced)
 	}
 	if s.Locked {
-		log.Warn("forecast locked, none submitted — skipping")
+		if id == "" {
+			log.Warn("forecast locked, none submitted — skipping")
+		} else {
+			log.Warn("forecast locked — cannot override the existing forecast")
+		}
 		return nil
 	}
 
@@ -293,10 +320,17 @@ func ensureForecast(ctx context.Context, c *Client, pred Predictor, s *Structure
 	if err != nil {
 		return fmt.Errorf("build bracket: %w", err)
 	}
-	if err := c.SaveForecast(ctx, order, thirds, bracket); err != nil {
+	action := "saved"
+	if id != "" {
+		err = c.UpdateForecast(ctx, id, order, thirds, bracket)
+		action = "regenerated"
+	} else {
+		err = c.SaveForecast(ctx, order, thirds, bracket)
+	}
+	if err != nil {
 		return fmt.Errorf("save: %w", err)
 	}
-	log.Info("forecast saved", "bracket_picks", len(bracket))
+	log.Info("forecast "+action, "bracket_picks", len(bracket))
 	return nil
 }
 
@@ -373,7 +407,7 @@ const (
 	tipBatchTimeout = 10 * time.Minute
 )
 
-func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match, teamName map[string]string, log *slog.Logger) error {
+func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match, teamName map[string]string, log *slog.Logger, forceTips bool) error {
 	now, err := c.Now(ctx)
 	if err != nil {
 		return fmt.Errorf("now: %w", err)
@@ -414,8 +448,8 @@ func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match,
 		if m.Stage != "group" && (m.HomeTeam == "" || m.AwayTeam == "") {
 			continue // knockout matchup not resolved yet
 		}
-		if _, already := tipByMatch[m.ID]; already && !hasNewInfo {
-			continue // already tipped and nothing new to reconsider
+		if _, already := tipByMatch[m.ID]; already && !hasNewInfo && !forceTips {
+			continue // already tipped and nothing new to reconsider (unless forced)
 		}
 		targets = append(targets, tipTarget{
 			MatchID: m.ID, Stage: m.Stage,
@@ -430,7 +464,7 @@ func submitTips(ctx context.Context, c *Client, pred Predictor, matches []Match,
 		log.Info("tips: nothing to do")
 		return nil
 	}
-	log.Info("tips: evaluating open matches", "count", len(targets), "has_new_info", hasNewInfo)
+	log.Info("tips: evaluating open matches", "count", len(targets), "has_new_info", hasNewInfo, "forced", forceTips)
 
 	created, updated, failedMatches, failedBatches := 0, 0, 0, 0
 	for start := 0; start < len(targets); start += tipBatch {

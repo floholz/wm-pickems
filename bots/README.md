@@ -52,13 +52,21 @@ go run . --once     # single pass, even if --loop is set (overrides the containe
 
 A no-flag invocation is already a single run, so the simplest one-off is just `go run .` (or `./wm-pickems-bot`).
 
-For a bot that's **already running in `--loop`** (the container default), send it `SIGUSR1` to run immediately instead of waiting for the next tick — it reuses the live process and its env:
+For a bot that's **already running in `--loop`** (the container default), send it a signal to act now without waiting for the next tick — it reuses the live process and its env:
+
+| Signal | Effect |
+|---|---|
+| `SIGUSR1` | Run now (normal): tip new open matches + revise where a result changed since the last tip. |
+| `SIGUSR2` | Re-evaluate **all** open tips and override existing picks — use after retuning a brain (e.g. the algo ratings table or the Claude prompt). |
+| `SIGHUP`  | Regenerate the **forecast**, overriding the existing one. Pre-lock only — the server rejects forecast edits once the tournament starts. |
 
 ```sh
-kill -USR1 <pid>                               # bare process
-docker kill --signal=SIGUSR1 wmp_bot_claude    # docker run
-docker compose kill -s SIGUSR1 bot-claude      # compose service
+kill -USR2 <pid>                               # re-tip, bare process
+docker kill --signal=SIGUSR2 wmp_bot_claude    # re-tip, docker run
+docker compose kill -s SIGHUP bot-claude       # re-forecast, compose service
 ```
+
+`SIGUSR2`/`SIGHUP` only re-submit a pick where the new prediction actually differs from the saved one, so re-running after no change is a cheap no-op (aside from the LLM calls).
 
 A fresh one-off against the deployment without touching the running loop (`--once` overrides the image's `--loop` default):
 

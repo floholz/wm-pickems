@@ -253,3 +253,13 @@ func (c *Client) SaveForecast(ctx context.Context, order map[string][]string, th
 		"bracket":         bracket,
 	}, nil)
 }
+
+// UpdateForecast overwrites an existing forecast record (used to regenerate after
+// a brain change). The server still rejects edits once the forecast has locked.
+func (c *Client) UpdateForecast(ctx context.Context, forecastID string, order map[string][]string, thirds map[string]string, bracket map[string]string) error {
+	return c.do(ctx, http.MethodPatch, "/api/collections/forecasts/records/"+forecastID, map[string]any{
+		"groupOrder":      order,
+		"thirdQualifiers": thirds,
+		"bracket":         bracket,
+	}, nil)
+}
