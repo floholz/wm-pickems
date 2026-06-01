@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tipsStore, type Match } from '$lib/tips.svelte';
 	import TipCard from '$lib/components/TipCard.svelte';
+	import GroupStandings from '$lib/components/GroupStandings.svelte';
 	import { collapseOnScroll } from '$lib/actions';
 	import { serverClock } from '$lib/serverclock.svelte';
 	import { LocateFixed } from '@lucide/svelte';
@@ -148,6 +149,9 @@
 				/>
 			</div>
 		{/each}
+		{#if tab === 'group'}
+			<GroupStandings matches={ms} />
+		{/if}
 	{/each}
 	<div class="fabpad"></div>
 {/if}
