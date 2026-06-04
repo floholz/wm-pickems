@@ -32,13 +32,16 @@
 		path.startsWith('/join') ||
 			path.startsWith('/confirm-password-reset/')
 	);
+	// The home route doubles as the public landing page for signed-out
+	// visitors (app home once authed) — never bounce anon users away from it.
+	let isLanding = $derived(path === '/');
 	// No app chrome on the standalone auth / invite / reset screens.
 	let chrome = $derived(auth.isAuthed && !isAuthPage && !isPublic);
 
 	// SPA auth guard.
 	$effect(() => {
 		const invite = $page.url.searchParams.get('invite');
-		if (!auth.isAuthed && !isAuthPage && !isPublic) {
+		if (!auth.isAuthed && !isAuthPage && !isPublic && !isLanding) {
 			goto('/login', { replaceState: true });
 		}
 		// Already signed in: skip the auth pages. If they arrived via an

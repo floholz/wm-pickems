@@ -2,6 +2,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { api, type LeagueSummary } from '$lib/api';
 	import { Telescope, Volleyball, Trophy, Users, ChevronRight } from '@lucide/svelte';
+	import Landing from '$lib/components/Landing.svelte';
 
 	let leagues = $state<LeagueSummary[]>([]);
 	let loaded = $state(false);
@@ -37,6 +38,9 @@
 	];
 </script>
 
+{#if !auth.isAuthed}
+	<Landing />
+{:else}
 <header>
 	<p class="kicker">Matchday HQ</p>
 	<h1>Hi,&nbsp;{auth.user?.name}</h1>
@@ -85,6 +89,7 @@
 	{/if}
 </section>
 </div>
+{/if}
 
 <style>
 	header {
