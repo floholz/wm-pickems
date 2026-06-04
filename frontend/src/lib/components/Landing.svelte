@@ -76,8 +76,11 @@
 		<h1 class="head">
 			Predict the cup.<br /><span class="grad"
 				>Beat your <span class="roll" aria-hidden="true"
-					><span class="roll-size">colleagues.</span
-					>{#each rollWords as w, i (w)}<b style="--i:{i}">{w}</b>{/each}</span
+					><span class="roll-size">colleagues.</span><span class="drum"
+						>{#each rollWords as w, i (w)}<b class="face" style="--i:{i}"
+								><span>{w}</span></b
+							>{/each}</span
+					></span
 				><span class="sr-only">friends.</span></span
 			>
 		</h1>
@@ -280,25 +283,28 @@
 		line-height: 0.92;
 		margin: 0.6rem 0 0;
 	}
-	.grad,
-	.roll b {
+	.grad {
 		background: linear-gradient(100deg, var(--accent) 10%, var(--accent-2) 90%);
 		-webkit-background-clip: text;
 		background-clip: text;
 		color: transparent;
 	}
 
-	/* Rolling word: each option drops in from the top, holds, exits the bottom.
-	   .roll-size (longest word) sets the slot width so the rest left-align under
-	   it; the trailing space sits at the end of the line, so it's invisible. */
+	/* Rolling word: a hexagonal "drum" whose six faces each carry one word and
+	   that rotates on the X-axis, flipping to the next word. .roll-size (longest
+	   word) fixes the slot width so every face left-aligns under it; the trailing
+	   space sits at the line end, so it's invisible. */
 	.roll {
-		--n: 6; /* number of words (rollWords.length) */
-		--slot: 2.4s; /* time each word is on screen */
+		--n: 6; /* number of faces (rollWords.length) */
+		--slot: 2.4s; /* time each word rests facing the viewer */
+		--theta: 60deg; /* 360 / n */
+		--r: 0.866em; /* prism apothem = (faceHeight/2) / tan(theta/2) */
 		position: relative;
 		display: inline-block;
 		height: 1em;
 		line-height: 1;
 		overflow: hidden;
+		perspective: 9em;
 		vertical-align: bottom;
 		text-align: left;
 	}
@@ -308,49 +314,46 @@
 		height: 1em;
 		line-height: 1;
 	}
-	.roll b {
+	.drum {
+		position: absolute;
+		inset: 0;
+		transform-style: preserve-3d;
+		/* translateZ(-r) keeps the front face on the screen plane (natural size) */
+		transform: translateZ(calc(var(--r) * -1));
+		animation: drum calc(var(--n) * var(--slot)) infinite;
+	}
+	.face {
 		position: absolute;
 		inset: 0;
 		height: 1em;
 		line-height: 1;
 		font-weight: inherit;
-		white-space: nowrap;
-		opacity: 0;
-		transform: translateY(-115%);
-		animation: rollword calc(var(--n) * var(--slot)) infinite;
-		/* base offset so word 0 is already in its hold window on first paint */
-		animation-delay: calc((var(--i) * var(--slot) + 1.15s) * -1);
+		backface-visibility: hidden;
+		transform: rotateX(calc(var(--i) * var(--theta))) translateZ(var(--r));
 	}
-	@keyframes rollword {
-		0% {
-			transform: translateY(-115%);
-			opacity: 0;
-		}
-		2.5% {
-			transform: translateY(0);
-			opacity: 1;
-		}
-		14% {
-			transform: translateY(0);
-			opacity: 1;
-		}
-		16.6% {
-			transform: translateY(115%);
-			opacity: 0;
-		}
-		100% {
-			transform: translateY(115%);
-			opacity: 0;
-		}
+	.face > span {
+		display: block;
+		white-space: nowrap;
+		background: linear-gradient(100deg, var(--accent) 10%, var(--accent-2) 90%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	/* Hold on each face, then a quick flip to the next (-60° per step). The drum
+	   keeps the constant translateZ(-r) so the front face stays full-size. */
+	@keyframes drum {
+		0%, 13% { transform: translateZ(calc(var(--r) * -1)) rotateX(0deg); }
+		16.6%, 29.6% { transform: translateZ(calc(var(--r) * -1)) rotateX(-60deg); }
+		33.3%, 46.3% { transform: translateZ(calc(var(--r) * -1)) rotateX(-120deg); }
+		50%, 63% { transform: translateZ(calc(var(--r) * -1)) rotateX(-180deg); }
+		66.6%, 79.6% { transform: translateZ(calc(var(--r) * -1)) rotateX(-240deg); }
+		83.3%, 96.3% { transform: translateZ(calc(var(--r) * -1)) rotateX(-300deg); }
+		100% { transform: translateZ(calc(var(--r) * -1)) rotateX(-360deg); }
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.roll b {
+		.drum {
 			animation: none;
-			transform: none;
-			opacity: 0;
-		}
-		.roll b:first-of-type {
-			opacity: 1;
+			transform: translateZ(calc(var(--r) * -1)) rotateX(0deg);
 		}
 	}
 	.sr-only {
