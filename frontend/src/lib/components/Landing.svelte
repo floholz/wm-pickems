@@ -74,7 +74,13 @@
 			>
 		</p>
 		<h1 class="head">
-			Predict the cup.<br /><span class="grad"
+			Predict the <span class="wm"
+				>WM<span class="wm-note"
+					><span class="wm-arrow" aria-hidden="true"></span><span class="wm-note-text"
+						>abbr. <em>„Weltmeisterschaft“</em> — German for World&nbsp;Cup</span
+					></span
+				></span
+			>.<br /><span class="grad"
 				>Beat your <span class="roll" aria-hidden="true"
 					><span class="roll-size">colleagues.</span><span class="drum"
 						>{#each rollWords as w, i (w)}<b class="face" style="--i:{i}"
@@ -249,6 +255,8 @@
 </div>
 
 <style>
+	@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap');
+
 	.land {
 		max-width: 960px;
 		margin: 0 auto;
@@ -259,6 +267,68 @@
 	.hero {
 		position: relative;
 		padding: clamp(1.5rem, 5vw, 3rem) 0 1.5rem;
+	}
+
+	/* The "WM" word + a hand-scrawled note explaining the German abbreviation.
+	   The note is anchored to .wm so it tracks the word across breakpoints. */
+	.wm {
+		position: relative;
+		color: var(--accent);
+	}
+	.wm-note {
+		position: absolute;
+		left: calc(100% + 1.3rem);
+		top: -0.7rem;
+		width: 11.5rem;
+		pointer-events: none;
+		text-transform: none;
+		font-family: 'Caveat', cursive;
+		font-weight: 600;
+		font-size: 1.45rem;
+		line-height: 1.02;
+		letter-spacing: 0;
+		color: var(--muted);
+		transform: rotate(-3deg);
+	}
+	.wm-note em {
+		font-style: normal;
+		color: var(--text);
+	}
+	/* Hand-drawn arrow, tinted via mask, sweeping down-left from the note to WM. */
+	.wm-arrow {
+		position: absolute;
+		left: -5.4rem;
+		top: 0.7rem;
+		width: 5.2rem;
+		height: 3.75rem; /* arrow-vector aspect 398:287 */
+		background: var(--muted);
+		-webkit-mask: url('/assets/arrow-vector.svg') left bottom / contain no-repeat;
+		mask: url('/assets/arrow-vector.svg') left bottom / contain no-repeat;
+		transform: rotate(4deg);
+	}
+	.wm-note-text {
+		display: block;
+	}
+	/* Below desktop: no room beside WM, so anchor the note to the hero (.wm goes
+	   static) and tuck it in the empty space lower-right, arrow flipped to point up. */
+	@media (max-width: 900px) {
+		.wm {
+			position: static;
+		}
+		.wm-note {
+			left: auto;
+			right: 0.2rem;
+			top: 7rem;
+			width: 9.5rem;
+			font-size: 1.2rem;
+			transform: rotate(-3deg);
+		}
+		.wm-arrow {
+			left: -2.6rem;
+			top: -1.7rem;
+			width: 4.2rem;
+			transform: scaleY(-1) rotate(-6deg);
+		}
 	}
 	.flags {
 		white-space: nowrap;
