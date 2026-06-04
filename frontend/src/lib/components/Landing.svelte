@@ -64,8 +64,10 @@
 <div class="land stagger">
 	<!-- ============ HERO ============ -->
 	<header class="hero">
-		<p class="kicker">
-			FIFA World Cup 2026 · 11 Jun – 19 Jul <span class="flags">· 🇨🇦 🇲🇽 🇺🇸</span>
+		<p class="kicker hero-kick">
+			<span>FIFA World Cup 2026</span><span class="dates"
+				>11 Jun – 19 Jul <span class="flags">· 🇨🇦 🇲🇽 🇺🇸</span></span
+			>
 		</p>
 		<h1 class="head">
 			Predict the cup.<br /><span class="grad">Beat your friends.</span>
@@ -248,6 +250,21 @@
 	}
 	.flags {
 		white-space: nowrap;
+	}
+	/* Desktop: one line — a dot separates the title from the dates. */
+	.hero-kick .dates::before {
+		content: '·';
+		margin: 0 0.5em;
+	}
+	/* Mobile: break into two lines — title, then dates · flags (no separator). */
+	@media (max-width: 600px) {
+		.hero-kick .dates {
+			display: block;
+			margin-top: 0.25rem;
+		}
+		.hero-kick .dates::before {
+			display: none;
+		}
 	}
 	.head {
 		font-size: clamp(2.6rem, 11vw, 5.5rem);
