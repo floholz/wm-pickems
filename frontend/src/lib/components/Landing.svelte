@@ -20,6 +20,10 @@
 	let primaryHref = $derived(auth.isAuthed ? '/' : '/register');
 	let primaryLabel = $derived(auth.isAuthed ? 'Back to the app' : 'Create free account');
 
+	// The hero headline rolls "friends" through these (drop in from the top).
+	// Keep the longest one as the width sizer (.roll-size) below.
+	const rollWords = ['friends.', 'colleagues.', 'family.', 'team.', 'coworkers.', 'rivals.'];
+
 	const why = [
 		{
 			icon: Gift,
@@ -70,7 +74,12 @@
 			>
 		</p>
 		<h1 class="head">
-			Predict the cup.<br /><span class="grad">Beat your friends.</span>
+			Predict the cup.<br /><span class="grad"
+				>Beat your <span class="roll" aria-hidden="true"
+					><span class="roll-size">colleagues.</span
+					>{#each rollWords as w, i (w)}<b style="--i:{i}">{w}</b>{/each}</span
+				><span class="sr-only">friends.</span></span
+			>
 		</h1>
 		<p class="tldr">
 			<span class="tl">TL;DR</span>
@@ -271,11 +280,89 @@
 		line-height: 0.92;
 		margin: 0.6rem 0 0;
 	}
-	.grad {
+	.grad,
+	.roll b {
 		background: linear-gradient(100deg, var(--accent) 10%, var(--accent-2) 90%);
 		-webkit-background-clip: text;
 		background-clip: text;
 		color: transparent;
+	}
+
+	/* Rolling word: each option drops in from the top, holds, exits the bottom.
+	   .roll-size (longest word) sets the slot width so the rest left-align under
+	   it; the trailing space sits at the end of the line, so it's invisible. */
+	.roll {
+		--n: 6; /* number of words (rollWords.length) */
+		--slot: 2.4s; /* time each word is on screen */
+		position: relative;
+		display: inline-block;
+		height: 1em;
+		line-height: 1;
+		overflow: hidden;
+		vertical-align: bottom;
+		text-align: left;
+	}
+	.roll-size {
+		display: block;
+		visibility: hidden;
+		height: 1em;
+		line-height: 1;
+	}
+	.roll b {
+		position: absolute;
+		inset: 0;
+		height: 1em;
+		line-height: 1;
+		font-weight: inherit;
+		white-space: nowrap;
+		opacity: 0;
+		transform: translateY(-115%);
+		animation: rollword calc(var(--n) * var(--slot)) infinite;
+		/* base offset so word 0 is already in its hold window on first paint */
+		animation-delay: calc((var(--i) * var(--slot) + 1.15s) * -1);
+	}
+	@keyframes rollword {
+		0% {
+			transform: translateY(-115%);
+			opacity: 0;
+		}
+		2.5% {
+			transform: translateY(0);
+			opacity: 1;
+		}
+		14% {
+			transform: translateY(0);
+			opacity: 1;
+		}
+		16.6% {
+			transform: translateY(115%);
+			opacity: 0;
+		}
+		100% {
+			transform: translateY(115%);
+			opacity: 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.roll b {
+			animation: none;
+			transform: none;
+			opacity: 0;
+		}
+		.roll b:first-of-type {
+			opacity: 1;
+		}
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 	.tldr {
 		max-width: 46ch;
