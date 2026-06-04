@@ -45,6 +45,11 @@
 		{ label: 'Total goals', pts: '+1' },
 		{ label: 'Goal difference', pts: '+1' }
 	];
+	// Broadcast lower-third ticker — repeated enough that one copy overflows the
+	// widest container, so the two identical copies scroll seamlessly (-50%).
+	const ticker = ['Free', 'No ads', 'Open source'];
+	const tickerRun = Array.from({ length: 5 }, () => ticker).flat();
+
 	// Forecast knockout-reach escalation.
 	const reach = [
 		{ r: 'R32', p: '1' },
@@ -59,7 +64,9 @@
 <div class="land stagger">
 	<!-- ============ HERO ============ -->
 	<header class="hero">
-		<p class="kicker">FIFA World Cup 2026 · 11 Jun – 19 Jul · 🇨🇦 🇲🇽 🇺🇸</p>
+		<p class="kicker">
+			FIFA World Cup 2026 · 11 Jun – 19 Jul <span class="flags">· 🇨🇦 🇲🇽 🇺🇸</span>
+		</p>
 		<h1 class="head">
 			Predict the cup.<br /><span class="grad">Beat your friends.</span>
 		</h1>
@@ -87,10 +94,11 @@
 	<!-- ============ BROADCAST MARQUEE ============ -->
 	<div class="marquee" aria-hidden="true">
 		<div class="track">
-			{#each Array(2) as _, i (i)}
+			{#each [0, 1] as copy (copy)}
 				<span class="run">
-					<b>Free</b><i>·</i><b>No ads</b><i>·</i><b>Open source</b><i>·</i>
-					<b>Free</b><i>·</i><b>No ads</b><i>·</i><b>Open source</b><i>·</i>
+					{#each tickerRun as t, k (k)}
+						<b>{t}</b><i>·</i>
+					{/each}
 				</span>
 			{/each}
 		</div>
@@ -105,8 +113,10 @@
 				{@const Icon = w.icon}
 				<div class="card why">
 					<span class="ic"><Icon size={22} /></span>
-					<h3>{w.title}</h3>
-					<p class="muted">{w.body}</p>
+					<div class="why-txt">
+						<h3>{w.title}</h3>
+						<p class="muted">{w.body}</p>
+					</div>
 				</div>
 			{/each}
 		</div>
@@ -235,6 +245,9 @@
 	.hero {
 		position: relative;
 		padding: clamp(1.5rem, 5vw, 3rem) 0 1.5rem;
+	}
+	.flags {
+		white-space: nowrap;
 	}
 	.head {
 		font-size: clamp(2.6rem, 11vw, 5.5rem);
@@ -372,6 +385,7 @@
 		place-items: center;
 		width: 44px;
 		height: 44px;
+		flex: none;
 		border-radius: var(--radius-sm);
 		background: var(--surface-2);
 		color: var(--accent);
@@ -380,7 +394,19 @@
 	.ic.alt {
 		color: var(--accent-2);
 	}
-	.why h3,
+	/* Why cards read as [icon][text] rows — compact on mobile, no dead space
+	   on desktop. */
+	.why {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.9rem;
+	}
+	.why .ic {
+		margin-bottom: 0;
+	}
+	.why h3 {
+		margin-bottom: 0.3rem;
+	}
 	.mode h3 {
 		margin-bottom: 0.4rem;
 	}

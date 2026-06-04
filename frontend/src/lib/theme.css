@@ -12,7 +12,7 @@
 :root {
 	/* ---- Brand ---- */
 	--accent: #c8fb50; /* pitch-lime — primary actions, links, focus */
-	--accent-2: #ff5a36; /* sunset-orange — live, highlights, alerts */
+	--accent-2: #eafe56; /* electric yellow-lime — highlights, accents */
 	--accent-fg: #08110a; /* ink on a solid lime fill */
 	--accent-ink: #08110a; /* ink on a bright accent gradient */
 
