@@ -26,7 +26,7 @@
 	// The landing is only mounted for signed-out visitors, but keep the primary
 	// CTA honest if an authed user ever lands here (e.g. via a stale link).
 	let primaryHref = $derived(auth.isAuthed ? '/' : '/register');
-	let primaryLabel = $derived(auth.isAuthed ? 'Back to the app' : 'Create free account');
+	let primaryLabel = $derived(auth.isAuthed ? 'Back to the app' : 'Join for free');
 
 	// The hero headline rolls "friends" through these (drop in from the top).
 	// Keep the longest one as the width sizer (.roll-size) below.
@@ -41,7 +41,7 @@
 		{
 			icon: Ban,
 			title: 'No ads',
-			body: 'Not a single banner or tracker. Your data stays yours — we just keep score.'
+			body: 'NEVER. Not a single banner or tracker. Your data stays yours — we just keep score.'
 		},
 		{
 			icon: Code,
@@ -201,9 +201,9 @@
 			>
 		</h1>
 		<p class="tldr">
-			<span class="tl">TL;DR</span>
-			A free prediction game for the World Cup. Call the whole tournament once,
-			tip every single match, and climb private leaderboards with your mates.
+			<span class="tl">TL;DR</span>&nbsp;
+			A free prediction game for the World Cup. <br>Call the full tournament before kickoff,
+			tip every match along the way, and climb the leaderboards with your mates.
 		</p>
 
 		<div class="hero-actions">
@@ -271,7 +271,7 @@
 					<h3>Forecast</h3>
 					<p class="muted">
 						One pre-tournament prediction: full group standings 1–4, the eight
-						best-third qualifiers and the entire knockout bracket. Locks at the
+						best-third advancers and the entire knockout bracket. Locks at the
 						opening kickoff — then scores tick in stage by stage.
 					</p>
 					<span class="pill ok"><Lock size={13} /> Locks at first kickoff</span>
@@ -357,7 +357,7 @@
 								</span>
 							</div>
 							<div class="tmeta">
-								<span class="muted">Group F · Matchday 1 · Sat, Jun 13, 6:00 PM</span>
+								<span class="muted">Semi-Final · Tue, Jul 08, 08:00 PM</span>
 								<span class="tspacer"></span>
 								<span class="pill ok"><Check size={12} /> tipped</span>
 								<ChevronUp size={16} class="tcv" />
@@ -402,21 +402,19 @@
 		<div class="card leagues">
 			<div class="lg-copy">
 				<p class="muted">
-					Spin up a private competition and share a join code with your friends.
-					Each league has its own leaderboard with
-					<b>Overall</b>, <b>Tips</b> and <b>Forecast</b> tables, full tiebreaker
-					stats and a built-in scoring legend. Everyone's auto-entered into a
+					Spin up a competition and compete against your friends in your private league.
+					Each league has its own leaderboard with stats, scores and comprehensive tiebreaker rules. Share your league's code with your friends to join. Everyone's auto-entered into a
 					global league too — so you're never playing alone.
 				</p>
 				<div class="lg-tags">
-					<span class="pill"><Users size={13} /> Private groups</span>
+					<span class="pill"><Users size={13} /> Private leagues</span>
 					<span class="pill"><Trophy size={13} /> Live leaderboards</span>
-					<span class="pill"><Sparkles size={13} /> Bot opponents</span>
+					<span class="pill"><Sparkles size={13} /> AI opponents</span>
 				</div>
 			</div>
 			<div class="invite" aria-hidden="true">
 				<span class="invite-lbl">Join code</span>
-				<span class="invite-code digits">WC-2026</span>
+				<span class="invite-code digits">WM2026</span>
 			</div>
 		</div>
 	</section>
@@ -486,7 +484,9 @@
 			<p class="muted ai-lead">
 				The biggest names in AI each call the whole tournament and tip every
 				single match — then line up on the same leaderboard as you. Same locks,
-				same blind picks, no second-guessing once the whistle blows. Drop them
+				same blind picks, no second-guessing once the whistle blows.
+				<br>
+				Drop them
 				into your league and settle it: who really reads the game best — you,
 				your mates, or the machines?
 			</p>
@@ -508,7 +508,7 @@
 	<section class="block final">
 		<div class="card cta-card">
 			<h2>Kickoff is coming.</h2>
-			<p class="muted">Make your picks before the rest of the group does.</p>
+			<p class="muted">Make your picks before the ball starts rolling.</p>
 			<Countdown variant="cta" />
 			<div class="cta">
 				<a class="btn big" href={primaryHref}>{primaryLabel} <ArrowRight size={18} /></a>
@@ -518,7 +518,7 @@
 			</div>
 		</div>
 		<p class="foot muted">
-			WM Tips · open source under GPLv3 · made for the love of the game, not your data.
+			WM Tips · open source · made for the love of the game · by <a href="https://floholz.com" target="_blank" rel="noopener">floholz</a>
 		</p>
 	</section>
 </div>
@@ -768,12 +768,12 @@
 		margin-top: 0;
 	}
 	.hero-cd {
-		margin-left: auto;
+		margin: auto;
 	}
 	.cta {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.7rem;
+		gap: 1.3rem;
 		margin-top: 1.5rem;
 	}
 	.btn.big {
@@ -788,11 +788,13 @@
 		margin: 2rem 0 0;
 		padding: 1rem 0 0;
 		border-top: 1px solid var(--border);
+		justify-items: center;
 	}
 	.stats div {
 		display: flex;
 		flex-direction: column;
 		gap: 0.1rem;
+		align-items: center;
 	}
 	.stats dt {
 		font-size: clamp(1.6rem, 5vw, 2.4rem);
