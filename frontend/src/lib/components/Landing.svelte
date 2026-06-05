@@ -195,16 +195,17 @@
 			tip every single match, and climb private leaderboards with your mates.
 		</p>
 
-		{#if countdown.ready && !countdown.locked}
-			<div class="hero-cd" bind:this={heroCdEl}>
-				<Countdown variant="hero" />
+		<div class="hero-actions">
+			<div class="cta">
+				<a class="btn big" href={primaryHref}>{primaryLabel} <ArrowRight size={18} /></a>
+				{#if !auth.isAuthed}
+					<a class="btn secondary big" href="/login">Sign in</a>
+				{/if}
 			</div>
-		{/if}
-
-		<div class="cta">
-			<a class="btn big" href={primaryHref}>{primaryLabel} <ArrowRight size={18} /></a>
-			{#if !auth.isAuthed}
-				<a class="btn secondary big" href="/login">Sign in</a>
+			{#if countdown.ready && !countdown.locked}
+				<div class="hero-cd" bind:this={heroCdEl}>
+					<Countdown variant="hero" />
+				</div>
 			{/if}
 		</div>
 
@@ -717,8 +718,20 @@
 		letter-spacing: 0.08em;
 		vertical-align: 1.5px;
 	}
-	.hero-cd {
+	/* Timer + CTAs share one row on desktop ([timer] [create] [sign in]); on
+	   narrow screens they wrap, so the timer drops to its own line above. */
+	.hero-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.7rem;
 		margin-top: 1.5rem;
+	}
+	.hero-actions .cta {
+		margin-top: 0;
+	}
+	.hero-cd {
+		margin-left: auto;
 	}
 	.cta {
 		display: flex;
