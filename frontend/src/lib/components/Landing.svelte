@@ -78,6 +78,17 @@
 		{ r: 'Champ', p: '13' }
 	];
 
+	// The AI challengers — the headline contenders in your league.
+	const aiModels = [
+		{ name: 'Claude', maker: 'Anthropic', icon: 'claude-icon.png' },
+		{ name: 'ChatGPT', maker: 'OpenAI', icon: 'gpt-icon.png' },
+		{ name: 'Gemini', maker: 'Google', icon: 'gemini-icon.png' },
+		{ name: 'DeepSeek', maker: 'DeepSeek', icon: 'deepseek-icon.png' },
+		{ name: 'Grok', maker: 'xAI', icon: 'grok-icon.png' },
+		{ name: 'Kimi', maker: 'Moonshot', icon: 'kimi-icon.png' },
+		{ name: 'Qwen', maker: 'Alibaba', icon: 'qwen-icon.png' }
+	];
+
 	// ---- Live in-app demos (mirror the real forecast/tips UI) -------------
 	// Forecast group orderer — reorder with the chevrons; top two advance, 3rd
 	// goes to the best-third pool. Flags for non-qualifiers live in /flags/more.
@@ -463,6 +474,32 @@
 				<p class="muted fine">
 					<Trophy size={13} /> Climbs each round a predicted team keeps surviving.
 				</p>
+			</div>
+		</div>
+	</section>
+
+	<!-- ============ AI STANDOFF ============ -->
+	<section class="block">
+		<p class="kicker">Man vs machine</p>
+		<h2>You vs the <span class="grad">world's best AI.</span></h2>
+		<div class="card ai">
+			<p class="muted ai-lead">
+				The biggest names in AI each call the whole tournament and tip every
+				single match — then line up on the same leaderboard as you. Same locks,
+				same blind picks, no second-guessing once the whistle blows. Drop them
+				into your league and settle it: who really reads the game best — you,
+				your mates, or the machines?
+			</p>
+			<div class="ai-roster">
+				{#each aiModels as m (m.name)}
+					<div class="ai-chip">
+						<span class="ai-icon"><img src="/bots/{m.icon}" alt="" loading="lazy" /></span>
+						<span class="ai-text">
+							<span class="ai-name">{m.name}</span>
+							<span class="ai-maker">{m.maker}</span>
+						</span>
+					</div>
+				{/each}
 			</div>
 		</div>
 	</section>
@@ -1180,6 +1217,60 @@
 		font-weight: 700;
 		color: var(--accent);
 		letter-spacing: 0.04em;
+	}
+
+	/* ---------- AI STANDOFF ---------- */
+	.ai-lead {
+		margin: 0 0 1.25rem;
+		line-height: 1.55;
+		max-width: 60ch;
+	}
+	.ai-roster {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: 0.6rem;
+	}
+	.ai-chip {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--border);
+		border-left: 3px solid var(--accent);
+		border-radius: var(--radius-sm);
+		background: var(--surface-2);
+	}
+	.ai-icon {
+		display: grid;
+		place-items: center;
+		width: 34px;
+		height: 34px;
+		flex: none;
+		padding: 5px;
+		border-radius: 8px;
+		background: #fff;
+	}
+	.ai-icon img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
+	.ai-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		min-width: 0;
+	}
+	.ai-name {
+		font-weight: 700;
+		font-size: 1.05rem;
+		color: var(--text);
+	}
+	.ai-maker {
+		font-size: 0.68rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--muted);
 	}
 
 	/* ---------- POINTS ---------- */
