@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
 	import { Confetti } from 'svelte-confetti';
 	import { auth } from '$lib/auth.svelte';
+	import { countdown } from '$lib/countdown.svelte';
+	import Countdown from './Countdown.svelte';
 	import {
 		Telescope,
 		Volleyball,
@@ -141,6 +144,24 @@
 			clearBursts = setTimeout(() => (bursts = []), BURST_MS + 400);
 		}
 	}
+
+	// Countdown to the lock (first kickoff). The sticky top bar shows once the
+	// hero countdown scrolls out of view; everything hides once locked.
+	let heroCdEl: HTMLElement | undefined = $state();
+	let showBar = $state(false);
+	onMount(() => {
+		countdown.start();
+	});
+	onDestroy(() => countdown.stop());
+	$effect(() => {
+		const el = heroCdEl;
+		if (!el) return;
+		const io = new IntersectionObserver(([entry]) => (showBar = !entry.isIntersecting), {
+			threshold: 0
+		});
+		io.observe(el);
+		return () => io.disconnect();
+	});
 </script>
 
 <div class="land stagger">
@@ -173,6 +194,12 @@
 			A free prediction game for the World Cup. Call the whole tournament once,
 			tip every single match, and climb private leaderboards with your mates.
 		</p>
+
+		{#if countdown.ready && !countdown.locked}
+			<div class="hero-cd" bind:this={heroCdEl}>
+				<Countdown variant="hero" />
+			</div>
+		{/if}
 
 		<div class="cta">
 			<a class="btn big" href={primaryHref}>{primaryLabel} <ArrowRight size={18} /></a>
@@ -444,6 +471,7 @@
 		<div class="card cta-card">
 			<h2>Kickoff is coming.</h2>
 			<p class="muted">Make your picks before the rest of the group does.</p>
+			<Countdown variant="cta" />
 			<div class="cta">
 				<a class="btn big" href={primaryHref}>{primaryLabel} <ArrowRight size={18} /></a>
 				{#if !auth.isAuthed}
@@ -456,6 +484,11 @@
 		</p>
 	</section>
 </div>
+
+<!-- Sticky lock countdown — slides in once the hero countdown scrolls away. -->
+{#if showBar && countdown.ready && !countdown.locked}
+	<div class="cd-stickybar"><Countdown variant="bar" /></div>
+{/if}
 
 <!-- Easter egg: saving Brazil 1 : Germany 7 pops confetti + trophies from the button. -->
 {#each bursts as b (b.id)}
@@ -683,6 +716,9 @@
 		font-size: 0.7rem;
 		letter-spacing: 0.08em;
 		vertical-align: 1.5px;
+	}
+	.hero-cd {
+		margin-top: 1.5rem;
 	}
 	.cta {
 		display: flex;
@@ -1251,6 +1287,26 @@
 		text-align: center;
 		font-size: 0.8rem;
 		margin: 1.25rem 0 0;
+	}
+
+	/* ---------- STICKY COUNTDOWN BAR ---------- */
+	.cd-stickybar {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 60;
+		animation: cd-drop 0.25s ease;
+	}
+	@keyframes cd-drop {
+		from {
+			transform: translateY(-100%);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.cd-stickybar {
+			animation: none;
+		}
 	}
 
 	/* ---------- EASTER EGG ---------- */
