@@ -107,5 +107,10 @@ func devManifest(b []byte) ([]byte, error) {
 	m["short_name"] = "WM Tips Dev"
 	m["theme_color"] = "#ff5a36"
 	m["background_color"] = "#1a0f0a"
+	m["icons"] = []any{
+		map[string]any{"src": "/icons/maskable_icon_dev_x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+		map[string]any{"src": "/icons/maskable_icon_dev_x128.png", "sizes": "128x128", "type": "image/png", "purpose": "any maskable"},
+		map[string]any{"src": "/icons/maskable_icon_dev_x32.png", "sizes": "32x32", "type": "image/png", "purpose": "any maskable"},
+	}
 	return json.Marshal(m)
 }
