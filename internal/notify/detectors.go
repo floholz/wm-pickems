@@ -8,6 +8,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 
+	"github.com/floholz/wm-pickems/internal/push"
 	"github.com/floholz/wm-pickems/internal/scoring"
 )
 
@@ -61,7 +62,9 @@ func (r *Runner) detectStageStarting(ctx context.Context, res *Result, now time.
 			CTAUrl:    base.url + "/tips",
 		}
 		for _, u := range recipients {
-			r.dispatch(ctx, res, ncol, u, "stage_starting", "stage_starting:"+st, data)
+			// Dedup key is per-user (and channel, via the ledger index) so every
+			// recipient is reminded — not just the first.
+			r.dispatch(ctx, res, ncol, u, "stage_starting", "stage_starting:"+st+":"+u.Id, data)
 		}
 	}
 	return nil
@@ -126,72 +129,136 @@ func (r *Runner) detectTipsReminder(ctx context.Context, res *Result, now time.T
 	names := r.teamNames()
 
 	for _, u := range recipients {
-		if !prefEnabled(u, "tips_reminder") {
-			continue
-		}
-		var newMissing []*core.Record
-		for _, m := range upcoming {
-			if r.hasTip(u.Id, m.Id) {
-				continue
-			}
-			if r.alreadySent("tips_reminder:" + u.Id + ":" + m.Id) {
-				continue
-			}
-			newMissing = append(newMissing, m)
-		}
-		if len(newMissing) == 0 {
-			continue
-		}
-		res.Considered++
-
-		lines := make([]matchLine, 0, len(newMissing))
-		for _, m := range newMissing {
-			lines = append(lines, matchLine{
-				Home:     r.teamLabel(m, "homeTeam", "homeLabel", names),
-				Away:     r.teamLabel(m, "awayTeam", "awayLabel", names),
-				WhenText: formatKickoff(m.GetDateTime("kickoff").Time()),
-			})
-		}
-		data := tplData{
-			AppName:     base.appName,
-			SettingsUrl: base.url + "/settings",
-			CTAText:     "Enter your tips",
-			CTAUrl:      base.url + "/tips",
-			Count:       len(lines),
-			Matches:     lines,
-		}
-		subject, html, text, rerr := render("tips_reminder", data)
-		if rerr != nil {
-			res.Failed++
-			continue
-		}
-		mid, serr := r.sender.Send(ctx, mailerMessage(u, subject, html, text))
-
-		// One ledger row per match so each is deduped independently; they share
-		// the provider message id of the single digest email.
-		status, errStr := "sent", ""
-		if serr != nil {
-			status, errStr = "failed", serr.Error()
-			res.Failed++
-		} else {
-			res.Sent++
-		}
-		for _, m := range newMissing {
-			rec := core.NewRecord(ncol)
-			rec.Set("user", u.Id)
-			rec.Set("event", "tips_reminder")
-			rec.Set("dedupKey", "tips_reminder:"+u.Id+":"+m.Id)
-			rec.Set("channel", "email")
-			rec.Set("status", status)
-			rec.Set("providerMessageId", mid)
-			rec.Set("error", errStr)
-			if status == "sent" {
-				rec.Set("sentAt", time.Now().UTC())
-			}
-			_ = r.app.Save(rec)
-		}
+		r.tipsEmail(ctx, res, ncol, u, upcoming, names, base)
+		r.tipsPush(ctx, res, ncol, u, upcoming, names, base)
 	}
 	return nil
+}
+
+// tipsKey is the per-(user, match) dedup key for tip reminders.
+func tipsKey(userID, matchID string) string {
+	return "tips_reminder:" + userID + ":" + matchID
+}
+
+// missingTips returns the upcoming matches the user hasn't tipped and hasn't yet
+// been reminded about on this channel.
+func (r *Runner) missingTips(u *core.Record, upcoming []*core.Record, channel string) []*core.Record {
+	var out []*core.Record
+	for _, m := range upcoming {
+		if r.hasTip(u.Id, m.Id) {
+			continue
+		}
+		if r.alreadySent(tipsKey(u.Id, m.Id), channel) {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// tipsData builds the digest template data for a set of untipped matches.
+func (r *Runner) tipsData(missing []*core.Record, names map[string]string, base baseInfo) tplData {
+	lines := make([]matchLine, 0, len(missing))
+	for _, m := range missing {
+		lines = append(lines, matchLine{
+			Home:     r.teamLabel(m, "homeTeam", "homeLabel", names),
+			Away:     r.teamLabel(m, "awayTeam", "awayLabel", names),
+			WhenText: formatKickoff(m.GetDateTime("kickoff").Time()),
+		})
+	}
+	return tplData{
+		AppName:     base.appName,
+		SettingsUrl: base.url + "/settings",
+		CTAText:     "Enter your tips",
+		CTAUrl:      base.url + "/tips",
+		Count:       len(lines),
+		Matches:     lines,
+	}
+}
+
+// writeTipsRows records one ledger row per reminded match (so each match is
+// deduped independently) sharing the single digest send's outcome.
+func (r *Runner) writeTipsRows(ncol *core.Collection, userID string, missing []*core.Record,
+	channel, mid, status, errStr string) {
+	for _, m := range missing {
+		rec := newLedgerRow(ncol, userID, "tips_reminder", tipsKey(userID, m.Id), channel)
+		rec.Set("status", status)
+		rec.Set("providerMessageId", mid)
+		rec.Set("error", errStr)
+		if status == "sent" {
+			rec.Set("sentAt", time.Now().UTC())
+		}
+		_ = r.app.Save(rec)
+	}
+}
+
+// tipsEmail sends the untipped-matches digest by email.
+func (r *Runner) tipsEmail(ctx context.Context, res *Result, ncol *core.Collection,
+	u *core.Record, upcoming []*core.Record, names map[string]string, base baseInfo) {
+
+	if !prefEnabled(u, "tips_reminder", "email") {
+		return
+	}
+	missing := r.missingTips(u, upcoming, "email")
+	if len(missing) == 0 {
+		return
+	}
+	res.Considered++
+	data := r.tipsData(missing, names, base)
+	subject, html, text, rerr := render("tips_reminder", data)
+	if rerr != nil {
+		res.Failed++
+		return
+	}
+	mid, serr := r.sender.Send(ctx, mailerMessage(u, subject, html, text))
+	status, errStr := "sent", ""
+	if serr != nil {
+		status, errStr = "failed", serr.Error()
+		res.Failed++
+	} else {
+		res.Sent++
+	}
+	r.writeTipsRows(ncol, u.Id, missing, "email", mid, status, errStr)
+}
+
+// tipsPush sends the untipped-matches digest as a push to all the user's devices.
+func (r *Runner) tipsPush(ctx context.Context, res *Result, ncol *core.Collection,
+	u *core.Record, upcoming []*core.Record, names map[string]string, base baseInfo) {
+
+	if r.push == nil || !r.push.Enabled() || !prefEnabled(u, "tips_reminder", "push") {
+		return
+	}
+	subs, err := push.Subscriptions(r.app, u.Id)
+	if err != nil || len(subs) == 0 {
+		return
+	}
+	missing := r.missingTips(u, upcoming, "push")
+	if len(missing) == 0 {
+		return
+	}
+	res.Considered++
+	data := r.tipsData(missing, names, base)
+	title, body, rerr := renderPush("tips_reminder", data)
+	if rerr != nil {
+		res.Failed++
+		return
+	}
+	ok, serr := r.sendPush(ctx, subs, push.Notification{
+		Title: title, Body: body, URL: data.CTAUrl, Tag: "tips_reminder",
+	})
+	status, errStr := "sent", ""
+	if ok == 0 {
+		status = "failed"
+		if serr != nil {
+			errStr = serr.Error()
+		} else {
+			errStr = "no reachable subscriptions"
+		}
+		res.Failed++
+	} else {
+		res.Sent++
+	}
+	r.writeTipsRows(ncol, u.Id, missing, "push", "", status, errStr)
 }
 
 // detectResultsRecap sends a once-daily digest (gated to the recap hour by the

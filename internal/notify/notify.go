@@ -10,6 +10,7 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/floholz/wm-pickems/internal/clock"
 	"github.com/floholz/wm-pickems/internal/mailer"
+	"github.com/floholz/wm-pickems/internal/push"
 	"github.com/floholz/wm-pickems/internal/users"
 )
 
@@ -30,6 +32,7 @@ import (
 type Runner struct {
 	app    core.App
 	sender mailer.Sender
+	push   push.Sender
 	// lastAllowKey is the normalized allowlist seen on the previous pass, used
 	// to log when the allowlist changes at runtime.
 	lastAllowKey string
@@ -57,6 +60,7 @@ func New(app core.App) *Runner {
 	return &Runner{
 		app:          app,
 		sender:       mailer.Pick(app),
+		push:         push.NewSender(push.ResolveKeys(app)),
 		lastAllowKey: allowlistKey(readConfig(app).Allowlist),
 		verbose:      strings.EqualFold(os.Getenv("NOTIFY_LOG_LEVEL"), "debug"),
 	}
@@ -236,15 +240,15 @@ func (r *Runner) eligibleUsers(allowlist []string) ([]*core.Record, error) {
 	return out, nil
 }
 
-// prefEnabled reports whether a user wants `event` emails. Absent prefs (or an
-// absent entry for this event) default to ON, so existing users opt out rather
-// than in.
-func prefEnabled(u *core.Record, event string) bool {
-	return prefEnabledFromRaw(u.GetString("notifyPrefs"), event)
+// prefEnabled reports whether a user wants `event` notifications on `channel`.
+// Absent prefs (or an absent entry) default to ON, so users opt out rather than
+// in.
+func prefEnabled(u *core.Record, event, channel string) bool {
+	return prefEnabledFromRaw(u.GetString("notifyPrefs"), event, channel)
 }
 
 // prefEnabledFromRaw is the pure core of prefEnabled, split out for testing.
-func prefEnabledFromRaw(raw, event string) bool {
+func prefEnabledFromRaw(raw, event, channel string) bool {
 	if raw == "" {
 		return true
 	}
@@ -256,47 +260,50 @@ func prefEnabledFromRaw(raw, event string) bool {
 	if !ok {
 		return true
 	}
-	v, ok := ev["email"]
+	v, ok := ev[channel]
 	if !ok {
 		return true
 	}
 	return v
 }
 
-// alreadySent reports whether an email for this dedup key has already been
-// recorded (race-free under the single-threaded cron; the unique index is the
-// backstop).
-func (r *Runner) alreadySent(dedupKey string) bool {
+// alreadySent reports whether this (dedupKey, channel) has already been recorded
+// (race-free under the single-threaded cron; the unique index is the backstop).
+func (r *Runner) alreadySent(dedupKey, channel string) bool {
 	_, err := r.app.FindFirstRecordByFilter("notifications",
-		"dedupKey = {:k} && channel = 'email'", map[string]any{"k": dedupKey})
+		"dedupKey = {:k} && channel = {:c}",
+		map[string]any{"k": dedupKey, "c": channel})
 	return err == nil
 }
 
-// dispatch sends one email to one user for one event, recording the outcome in
-// the ledger. It no-ops when the user opted out or the dedup key already exists.
+// dispatch fans one event out to every channel the user has enabled (email +
+// push), recording each outcome in the ledger under its own channel row.
 func (r *Runner) dispatch(ctx context.Context, res *Result, ncol *core.Collection,
 	u *core.Record, event, dedupKey string, data tplData) {
-
-	res.Considered++
-	if !prefEnabled(u, event) {
-		res.Skipped++
-		return
-	}
-	if r.alreadySent(dedupKey) {
-		res.Skipped++
-		return
-	}
 
 	data.AppName = data.AppNameOr(r.base().appName)
 	data.SettingsUrl = r.base().url + "/settings"
 
+	r.dispatchEmail(ctx, res, ncol, u, event, dedupKey, data)
+	r.dispatchPush(ctx, res, ncol, u, event, dedupKey, data)
+}
+
+// dispatchEmail sends one email to one user for one event.
+func (r *Runner) dispatchEmail(ctx context.Context, res *Result, ncol *core.Collection,
+	u *core.Record, event, dedupKey string, data tplData) {
+
+	res.Considered++
+	if !prefEnabled(u, event, "email") {
+		res.Skipped++
+		return
+	}
+	if r.alreadySent(dedupKey, "email") {
+		res.Skipped++
+		return
+	}
+
 	subject, html, text, err := render(event, data)
-	rec := core.NewRecord(ncol)
-	rec.Set("user", u.Id)
-	rec.Set("event", event)
-	rec.Set("dedupKey", dedupKey)
-	rec.Set("channel", "email")
-	rec.Set("status", "queued")
+	rec := newLedgerRow(ncol, u.Id, event, dedupKey, "email")
 	if err != nil {
 		rec.Set("status", "failed")
 		rec.Set("error", err.Error())
@@ -330,6 +337,94 @@ func (r *Runner) dispatch(ctx context.Context, res *Result, ncol *core.Collectio
 	rec.Set("sentAt", time.Now().UTC())
 	_ = r.app.Save(rec)
 	res.Sent++
+}
+
+// dispatchPush sends a push to all of a user's devices for one event. It no-ops
+// (without counting) when push is unconfigured or the user has no subscription,
+// since those aren't user-choice skips.
+func (r *Runner) dispatchPush(ctx context.Context, res *Result, ncol *core.Collection,
+	u *core.Record, event, dedupKey string, data tplData) {
+
+	if r.push == nil || !r.push.Enabled() {
+		return
+	}
+	subs, err := push.Subscriptions(r.app, u.Id)
+	if err != nil || len(subs) == 0 {
+		return
+	}
+
+	res.Considered++
+	if !prefEnabled(u, event, "push") {
+		res.Skipped++
+		return
+	}
+	if r.alreadySent(dedupKey, "push") {
+		res.Skipped++
+		return
+	}
+
+	title, body, err := renderPush(event, data)
+	rec := newLedgerRow(ncol, u.Id, event, dedupKey, "push")
+	if err != nil {
+		rec.Set("status", "failed")
+		rec.Set("error", err.Error())
+		_ = r.app.Save(rec)
+		res.Failed++
+		return
+	}
+	if err := r.app.Save(rec); err != nil {
+		res.Skipped++
+		return
+	}
+
+	ok, sendErr := r.sendPush(ctx, subs, push.Notification{
+		Title: title, Body: body, URL: data.CTAUrl, Tag: event,
+	})
+	if ok == 0 {
+		rec.Set("status", "failed")
+		if sendErr != nil {
+			rec.Set("error", sendErr.Error())
+		} else {
+			rec.Set("error", "no reachable subscriptions")
+		}
+		_ = r.app.Save(rec)
+		res.Failed++
+		return
+	}
+	rec.Set("status", "sent")
+	rec.Set("sentAt", time.Now().UTC())
+	_ = r.app.Save(rec)
+	res.Sent++
+}
+
+// sendPush delivers a notification to every subscription, pruning dead ones, and
+// returns how many were accepted plus the last non-fatal error.
+func (r *Runner) sendPush(ctx context.Context, subs []push.Subscription, n push.Notification) (int, error) {
+	ok := 0
+	var lastErr error
+	for _, s := range subs {
+		err := r.push.Send(ctx, s, n)
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, push.ErrGone):
+			push.PruneEndpoint(r.app, s.Endpoint)
+		default:
+			lastErr = err
+		}
+	}
+	return ok, lastErr
+}
+
+// newLedgerRow builds a queued notifications row.
+func newLedgerRow(ncol *core.Collection, userID, event, dedupKey, channel string) *core.Record {
+	rec := core.NewRecord(ncol)
+	rec.Set("user", userID)
+	rec.Set("event", event)
+	rec.Set("dedupKey", dedupKey)
+	rec.Set("channel", channel)
+	rec.Set("status", "queued")
+	return rec
 }
 
 // AppNameOr returns d's AppName if set, else the fallback.

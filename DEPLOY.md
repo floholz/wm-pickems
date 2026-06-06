@@ -21,12 +21,16 @@ cp .env.example .env
 | `NOTIFY_CRON` | no | Override the notify scheduler cadence (default `*/15 * * * *`). |
 | `NOTIFY_ALLOWLIST` | optional | Comma-separated emails for a gradual rollout — only these addresses get mail. Empty = everyone. |
 | `NOTIFY_LOG_LEVEL` | no | `debug` logs a per-pass heartbeat; default logs only passes that sent/failed mail (plus allowlist changes & errors). |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | optional | Web Push keys. Auto-generated & stored in the DB if unset; pin them to keep keys stable across a `pb_data` wipe (regenerating invalidates existing subscriptions). |
+| `VAPID_SUBJECT` | no | VAPID JWT contact (`mailto:` / `https:`). Defaults to `mailto:<sender address>`. |
 | `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD` | optional | Convenience only — see superuser step below. |
 
-**Notifications.** When a mail provider is configured, the app emails reminders
-before each stage kicks off, before the Forecast locks, before untipped matches,
-and a daily results recap — each user manages these per-event under **Settings →
-Notifications**. The reminder lead time (default **12h**), recap hour, and the
+**Notifications.** The app sends reminders before each stage kicks off, before
+the Forecast locks, before untipped matches, and a daily results recap — over
+**email** (when a mail provider is configured) and **Web Push** (when the user
+enables it on a device). Each user manages these per-event and per-channel under
+**Settings → Notifications**; push works on installed PWAs / supported browsers
+(iOS requires the app be added to the Home Screen first). The reminder lead time (default **12h**), recap hour, and the
 rollout allowlist are tunable at runtime via the `notify_config` row in the
 `app_meta` collection (PocketBase dashboard), no redeploy needed. With no
 provider set, emails are logged only (not delivered).

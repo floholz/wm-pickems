@@ -23,6 +23,9 @@ services:
       - NOTIFY_CRON=${NOTIFY_CRON:-}
       - NOTIFY_ALLOWLIST=${NOTIFY_ALLOWLIST:-}
       - NOTIFY_LOG_LEVEL=${NOTIFY_LOG_LEVEL:-}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
     volumes:
       - pb_data:/pb_data
     networks: [wmpickems]

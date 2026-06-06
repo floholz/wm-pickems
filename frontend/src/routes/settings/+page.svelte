@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { auth } from '$lib/auth.svelte';
+	import { push } from '$lib/push.svelte';
 	import { goto } from '$app/navigation';
 	import Avatar from '$lib/components/Avatar.svelte';
 
@@ -41,16 +42,21 @@
 		}
 	];
 
-	let prefs = $state<Record<string, { email?: boolean }>>({
+	type Channel = 'email' | 'push';
+	let prefs = $state<Record<string, { email?: boolean; push?: boolean }>>({
 		...(auth.user?.notifyPrefs ?? {})
 	});
 	let notifyBusy = $state(false);
 	let notifyError = $state('');
 
-	const isOn = (key: string) => prefs[key]?.email !== false;
+	// Absent pref defaults to ON (matches the backend default-on semantics).
+	const isOn = (key: string, ch: Channel) => prefs[key]?.[ch] !== false;
 
-	async function toggleNotify(key: string) {
-		const next = { ...prefs, [key]: { email: !isOn(key) } };
+	async function toggleNotify(key: string, ch: Channel) {
+		const next = {
+			...prefs,
+			[key]: { ...prefs[key], [ch]: !isOn(key, ch) }
+		};
 		const prev = prefs;
 		prefs = next;
 		notifyError = '';
@@ -207,31 +213,79 @@
 	<section class="card">
 		<h3>Notifications</h3>
 		<p class="muted small">
-			Choose which emails we send to <strong>{auth.user?.email ?? ''}</strong>.
+			Choose how we reach you for each event. Email goes to
+			<strong>{auth.user?.email ?? ''}</strong>; push arrives on this device.
 		</p>
+
+		<div class="push-device">
+			{#if !push.supported}
+				<p class="muted small">
+					Push isn't supported in this browser. On iPhone/iPad, add the app to
+					your Home Screen first.
+				</p>
+			{:else if push.blocked}
+				<p class="muted small">
+					Push is blocked in your browser settings — re-allow notifications for
+					this site to enable it.
+				</p>
+			{:else if push.subscribed}
+				<div class="push-row">
+					<span class="ok small">✓ Push enabled on this device</span>
+					<button
+						type="button"
+						class="btn secondary tiny"
+						onclick={() => push.disable()}
+						disabled={push.busy}
+					>
+						{push.busy ? 'Working…' : 'Disable'}
+					</button>
+				</div>
+			{:else}
+				<button
+					type="button"
+					class="btn secondary"
+					onclick={() => push.enable()}
+					disabled={push.busy}
+				>
+					{push.busy ? 'Enabling…' : 'Enable push on this device'}
+				</button>
+			{/if}
+			{#if push.error}<p class="error small">{push.error}</p>{/if}
+		</div>
+
 		{#if notifyError}<p class="error">{notifyError}</p>{/if}
 		<ul class="notify-list">
+			<li class="notify-row notify-head">
+				<span></span>
+				<span class="col-label">Email</span>
+				<span class="col-label">Push</span>
+			</li>
 			{#each NOTIFY_EVENTS as ev (ev.key)}
 				<li class="notify-row">
 					<div class="notify-text">
 						<span class="notify-label">{ev.label}</span>
 						<span class="muted notify-hint">{ev.hint}</span>
 					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={isOn(ev.key)}
-						aria-label={ev.label}
-						class="toggle"
-						class:on={isOn(ev.key)}
-						onclick={() => toggleNotify(ev.key)}
-						disabled={notifyBusy}
-					>
-						<span class="knob"></span>
-					</button>
+					{#each ['email', 'push'] as const as ch}
+						<button
+							type="button"
+							role="switch"
+							aria-checked={isOn(ev.key, ch)}
+							aria-label={`${ev.label} — ${ch}`}
+							class="toggle"
+							class:on={isOn(ev.key, ch)}
+							onclick={() => toggleNotify(ev.key, ch)}
+							disabled={notifyBusy || (ch === 'push' && !push.subscribed)}
+						>
+							<span class="knob"></span>
+						</button>
+					{/each}
 				</li>
 			{/each}
 		</ul>
+		{#if push.supported && !push.subscribed}
+			<p class="muted hint">Enable push above to use the Push toggles.</p>
+		{/if}
 	</section>
 
 	<p class="muted switch"><a href="/">Back</a></p>
@@ -283,16 +337,37 @@
 		margin: 0.5rem 0 0;
 		padding: 0;
 	}
-	.notify-row {
+	.push-device {
+		margin: 0 0 0.5rem;
+	}
+	.push-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
+	}
+	.btn.tiny {
+		padding: 0.3rem 0.7rem;
+		font-size: 0.8rem;
+	}
+	.notify-row {
+		display: grid;
+		grid-template-columns: 1fr 44px 44px;
+		align-items: center;
+		gap: 1rem;
 		padding: 0.85rem 0;
 		border-top: 1px solid var(--border);
 	}
-	.notify-row:first-child {
+	.notify-head {
+		padding: 0.2rem 0 0.4rem;
 		border-top: none;
+	}
+	.col-label {
+		text-align: center;
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--muted);
 	}
 	.notify-text {
 		display: flex;

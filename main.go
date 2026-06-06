@@ -19,6 +19,7 @@ import (
 	"github.com/floholz/wm-pickems/internal/leagues"
 	"github.com/floholz/wm-pickems/internal/notify"
 	"github.com/floholz/wm-pickems/internal/oauth"
+	"github.com/floholz/wm-pickems/internal/push"
 	"github.com/floholz/wm-pickems/internal/scoring"
 	"github.com/floholz/wm-pickems/internal/seed"
 	wmsync "github.com/floholz/wm-pickems/internal/sync"
@@ -50,6 +51,7 @@ func main() {
 		tips.Register(e.App, e)
 		forecast.Register(e.App, e)
 		scoring.Register(e.App, e)
+		push.Register(e.App, e)
 		notify.Register(e.App, e)
 		dev.Register(e.App, e)
 

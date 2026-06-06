@@ -53,24 +53,49 @@ func TestHumanizeDur(t *testing.T) {
 
 func TestPrefEnabledFromRaw(t *testing.T) {
 	tests := []struct {
-		name  string
-		raw   string
-		event string
-		want  bool
+		name    string
+		raw     string
+		event   string
+		channel string
+		want    bool
 	}{
-		{"empty prefs default on", "", "tips_reminder", true},
-		{"invalid json default on", "{not json", "tips_reminder", true},
-		{"event absent default on", `{"stage_starting":{"email":true}}`, "tips_reminder", true},
-		{"email key absent default on", `{"tips_reminder":{}}`, "tips_reminder", true},
-		{"explicitly on", `{"tips_reminder":{"email":true}}`, "tips_reminder", true},
-		{"explicitly off", `{"tips_reminder":{"email":false}}`, "tips_reminder", false},
-		{"off for a different event only", `{"results_recap":{"email":false}}`, "tips_reminder", true},
+		{"empty prefs default on", "", "tips_reminder", "email", true},
+		{"invalid json default on", "{not json", "tips_reminder", "email", true},
+		{"event absent default on", `{"stage_starting":{"email":true}}`, "tips_reminder", "email", true},
+		{"channel key absent default on", `{"tips_reminder":{}}`, "tips_reminder", "email", true},
+		{"email explicitly on", `{"tips_reminder":{"email":true}}`, "tips_reminder", "email", true},
+		{"email explicitly off", `{"tips_reminder":{"email":false}}`, "tips_reminder", "email", false},
+		{"off for a different event only", `{"results_recap":{"email":false}}`, "tips_reminder", "email", true},
+		{"push off while email on", `{"tips_reminder":{"email":true,"push":false}}`, "tips_reminder", "push", false},
+		{"push on while email off", `{"tips_reminder":{"email":false,"push":true}}`, "tips_reminder", "push", true},
+		{"push absent default on", `{"tips_reminder":{"email":false}}`, "tips_reminder", "push", true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := prefEnabledFromRaw(tc.raw, tc.event); got != tc.want {
-				t.Fatalf("prefEnabledFromRaw(%q,%q) = %v, want %v", tc.raw, tc.event, got, tc.want)
+			if got := prefEnabledFromRaw(tc.raw, tc.event, tc.channel); got != tc.want {
+				t.Fatalf("prefEnabledFromRaw(%q,%q,%q) = %v, want %v", tc.raw, tc.event, tc.channel, got, tc.want)
 			}
+		})
+	}
+}
+
+func TestRenderPushAllEvents(t *testing.T) {
+	events := []string{"stage_starting", "forecast_reminder", "tips_reminder", "results_recap"}
+	data := tplData{
+		StageName: "Round of 32", StartsIn: "12 hours", WhenText: "Sat 18:00 UTC",
+		Count: 2, Matches: []matchLine{{Home: "Brazil", Away: "Spain", WhenText: "soon"}},
+		Finalized: 3, PointsGained: 7, Total: 42,
+	}
+	for _, ev := range events {
+		t.Run(ev, func(t *testing.T) {
+			title, body, err := renderPush(ev, data)
+			if err != nil {
+				t.Fatalf("renderPush(%s): %v", ev, err)
+			}
+			if title == "" {
+				t.Fatalf("renderPush(%s): empty title", ev)
+			}
+			_ = body // body (preheader) is allowed to be empty for some events
 		})
 	}
 }

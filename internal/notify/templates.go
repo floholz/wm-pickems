@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	htmltemplate "html/template"
+	"strings"
 	texttemplate "text/template"
 )
 
@@ -73,4 +74,22 @@ func render(event string, data tplData) (subject, html, text string, err error) 
 	}
 
 	return sb.String(), hb.String(), tb.String(), nil
+}
+
+// renderPush builds a push notification's title and body by reusing the email
+// template's `subject` and `preheader` blocks. Parsed with text/template (not
+// html/template) so the short plain strings aren't HTML-entity escaped.
+func renderPush(event string, data tplData) (title, body string, err error) {
+	tt, err := texttemplate.New("").ParseFS(tmplFS,
+		"templates/layout.html", "templates/"+event+".html")
+	if err != nil {
+		return "", "", fmt.Errorf("parse push %s: %w", event, err)
+	}
+	var sb, pb bytes.Buffer
+	if err := tt.ExecuteTemplate(&sb, "subject", data); err != nil {
+		return "", "", fmt.Errorf("push subject %s: %w", event, err)
+	}
+	// preheader is optional; ignore its execution error and fall back to empty.
+	_ = tt.ExecuteTemplate(&pb, "preheader", data)
+	return strings.TrimSpace(sb.String()), strings.TrimSpace(pb.String()), nil
 }
