@@ -78,6 +78,7 @@ func Register(app core.App, se *core.ServeEvent) {
 			Body:  "Push notifications are working 🎉",
 			URL:   "/settings",
 			Tag:   "test",
+			Icon:  "/icons/notif/default.png",
 		}
 		ok := 0
 		results := make([]map[string]any, 0, len(subs))

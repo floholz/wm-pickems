@@ -378,7 +378,7 @@ func (r *Runner) dispatchPush(ctx context.Context, res *Result, ncol *core.Colle
 	}
 
 	ok, sendErr := r.sendPush(ctx, subs, push.Notification{
-		Title: title, Body: body, URL: toPath(data.CTAUrl), Tag: event,
+		Title: title, Body: body, URL: toPath(data.CTAUrl), Tag: event, Icon: pushIcon(event),
 	})
 	if ok == 0 {
 		rec.Set("status", "failed")

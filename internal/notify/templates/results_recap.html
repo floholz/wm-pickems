@@ -1,4 +1,6 @@
 {{define "subject"}}Your matchday recap{{end}}
+{{define "pushTitle"}}You earned +{{.PointsGained}} pt{{if ne .PointsGained 1}}s{{end}} today{{end}}
+{{define "pushBody"}}{{.Finalized}} match{{if ne .Finalized 1}}es{{end}} resolved · {{.Total}} total{{if .Ranks}} · #{{(index .Ranks 0).Rank}} in {{(index .Ranks 0).League}}{{end}}{{end}}
 {{define "preheader"}}{{.Finalized}} match{{if ne .Finalized 1}}es{{end}} resolved — see how you did.{{end}}
 {{define "content"}}
 <h1 style="margin:0 0 12px;font-size:22px;color:#f3f5fb;">Matchday recap</h1>

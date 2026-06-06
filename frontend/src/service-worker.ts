@@ -89,7 +89,13 @@ sw.addEventListener('fetch', (e) => {
 // Show a notification when the server pushes one. Payload is the JSON sent by
 // internal/push: { title, body, url, tag }.
 sw.addEventListener('push', (e) => {
-	let data: { title?: string; body?: string; url?: string; tag?: string } = {};
+	let data: {
+		title?: string;
+		body?: string;
+		url?: string;
+		tag?: string;
+		icon?: string;
+	} = {};
 	try {
 		data = e.data?.json() ?? {};
 	} catch {
@@ -99,8 +105,10 @@ sw.addEventListener('push', (e) => {
 	e.waitUntil(
 		sw.registration.showNotification(title, {
 			body: data.body ?? '',
-			icon: '/icons/maskable_icon_x192.png',
-			badge: '/icons/maskable_icon_x48.png',
+			// Per-event contextual icon (server-provided); monochrome badge for
+			// the status bar.
+			icon: data.icon || '/icons/notif/default.png',
+			badge: '/icons/badge.png',
 			tag: data.tag,
 			data: { url: data.url || '/' }
 		})

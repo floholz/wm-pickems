@@ -13,6 +13,23 @@ import (
 	"github.com/floholz/wm-pickems/internal/scoring"
 )
 
+// pushIcon maps an event to its contextual notification icon (served from the
+// embedded static assets). Falls back to a generic bell.
+func pushIcon(event string) string {
+	switch event {
+	case "stage_starting":
+		return "/icons/notif/stage.png"
+	case "forecast_reminder":
+		return "/icons/notif/forecast.png"
+	case "tips_reminder":
+		return "/icons/notif/tips.png"
+	case "results_recap":
+		return "/icons/notif/recap.png"
+	default:
+		return "/icons/notif/default.png"
+	}
+}
+
 // toPath reduces an (absolute or relative) URL to an origin-relative path+query
 // for push notifications, so the deep-link resolves against the service worker's
 // own origin (works on localhost, the tailnet, and prod without configuring the

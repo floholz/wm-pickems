@@ -110,7 +110,7 @@ func TestRenderPushAllEvents(t *testing.T) {
 			if title == "" {
 				t.Fatalf("renderPush(%s): empty title", ev)
 			}
-			_ = body // body (preheader) is allowed to be empty for some events
+			t.Logf("%s → title=%q body=%q", ev, title, body)
 		})
 	}
 }

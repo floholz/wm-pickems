@@ -27,6 +27,7 @@ type Notification struct {
 	Body  string `json:"body"`
 	URL   string `json:"url"`
 	Tag   string `json:"tag,omitempty"`
+	Icon  string `json:"icon,omitempty"`
 }
 
 // Sender delivers a Notification to one subscription.

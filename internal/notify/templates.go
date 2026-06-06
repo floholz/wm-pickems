@@ -76,20 +76,35 @@ func render(event string, data tplData) (subject, html, text string, err error) 
 	return sb.String(), hb.String(), tb.String(), nil
 }
 
-// renderPush builds a push notification's title and body by reusing the email
-// template's `subject` and `preheader` blocks. Parsed with text/template (not
-// html/template) so the short plain strings aren't HTML-entity escaped.
+// renderPush builds a push notification's title and body. It prefers the
+// push-specific `pushTitle` / `pushBody` blocks (punchier, data-rich copy) and
+// falls back to the email `subject` / `preheader` when an event doesn't define
+// them. Parsed with text/template (not html/template) so the short plain strings
+// aren't HTML-entity escaped.
 func renderPush(event string, data tplData) (title, body string, err error) {
 	tt, err := texttemplate.New("").ParseFS(tmplFS,
 		"templates/layout.html", "templates/"+event+".html")
 	if err != nil {
 		return "", "", fmt.Errorf("parse push %s: %w", event, err)
 	}
-	var sb, pb bytes.Buffer
-	if err := tt.ExecuteTemplate(&sb, "subject", data); err != nil {
-		return "", "", fmt.Errorf("push subject %s: %w", event, err)
+	title, err = execBlock(tt, "pushTitle", "subject", data)
+	if err != nil {
+		return "", "", fmt.Errorf("push title %s: %w", event, err)
 	}
-	// preheader is optional; ignore its execution error and fall back to empty.
-	_ = tt.ExecuteTemplate(&pb, "preheader", data)
-	return strings.TrimSpace(sb.String()), strings.TrimSpace(pb.String()), nil
+	// Body is optional — fall back to empty if neither block renders.
+	body, _ = execBlock(tt, "pushBody", "preheader", data)
+	return strings.TrimSpace(title), strings.TrimSpace(body), nil
+}
+
+// execBlock renders `primary` if defined, else `fallback`.
+func execBlock(tt *texttemplate.Template, primary, fallback string, data tplData) (string, error) {
+	name := primary
+	if tt.Lookup(primary) == nil {
+		name = fallback
+	}
+	var b bytes.Buffer
+	if err := tt.ExecuteTemplate(&b, name, data); err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }

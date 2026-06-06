@@ -1,4 +1,6 @@
 {{define "subject"}}{{.Count}} match{{if ne .Count 1}}es{{end}} you haven't tipped yet{{end}}
+{{define "pushTitle"}}{{if eq .Count 1}}{{(index .Matches 0).Home}} vs {{(index .Matches 0).Away}} — not tipped{{else}}{{.Count}} matches you haven't tipped{{end}}{{end}}
+{{define "pushBody"}}{{if eq .Count 1}}Kicks off {{(index .Matches 0).WhenText}} · locks at kickoff{{else}}They lock at kickoff — get your scores in.{{end}}{{end}}
 {{define "preheader"}}{{.Count}} upcoming match{{if ne .Count 1}}es{{end}} without a tip — they lock at kickoff.{{end}}
 {{define "content"}}
 <h1 style="margin:0 0 12px;font-size:22px;color:#f3f5fb;">Don't forget your tips</h1>
