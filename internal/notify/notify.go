@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,6 +30,9 @@ import (
 type Runner struct {
 	app    core.App
 	sender mailer.Sender
+	// lastAllowKey is the normalized allowlist seen on the previous pass, used
+	// to log when the allowlist changes at runtime.
+	lastAllowKey string
 }
 
 // base identity reused across emails.
@@ -45,13 +49,19 @@ type Result struct {
 	Skipped    int `json:"skipped"`
 }
 
-// New builds a Runner, selecting the mail provider once.
+// New builds a Runner, selecting the mail provider once. lastAllowKey is
+// seeded from the current config so the first pass doesn't report a "change".
 func New(app core.App) *Runner {
-	return &Runner{app: app, sender: mailer.Pick(app)}
+	return &Runner{
+		app:          app,
+		sender:       mailer.Pick(app),
+		lastAllowKey: allowlistKey(readConfig(app).Allowlist),
+	}
 }
 
 // Register wires the notify cron (and, in dev, a manual trigger route).
 func Register(app core.App, se *core.ServeEvent) {
+	seedNotifyConfig(app)
 	r := New(app)
 
 	cronExpr := os.Getenv("NOTIFY_CRON")
@@ -91,9 +101,17 @@ func Register(app core.App, se *core.ServeEvent) {
 func (r *Runner) RunOnce(ctx context.Context) (*Result, error) {
 	now := clock.Now(r.app)
 	cfg := readConfig(r.app)
+	r.logAllowlistChange(cfg.Allowlist)
 	lead := time.Duration(cfg.LeadHours) * time.Hour
 	base := r.base()
 	res := &Result{}
+
+	// Always log a one-line heartbeat so it's clear the scheduler ran, even on
+	// a no-op pass.
+	defer func() {
+		log.Printf("[notify] pass: considered=%d sent=%d failed=%d skipped=%d",
+			res.Considered, res.Sent, res.Failed, res.Skipped)
+	}()
 
 	recipients, err := r.eligibleUsers(cfg.Allowlist)
 	if err != nil {
@@ -123,11 +141,56 @@ func (r *Runner) RunOnce(ctx context.Context) (*Result, error) {
 		}
 	}
 
-	if res.Sent > 0 || res.Failed > 0 {
-		log.Printf("[notify] pass: considered=%d sent=%d failed=%d skipped=%d",
-			res.Considered, res.Sent, res.Failed, res.Skipped)
-	}
 	return res, nil
+}
+
+// logAllowlistChange logs when the resolved allowlist differs from the previous
+// pass (e.g. edited via app_meta at runtime), so the rollout state is visible
+// without a restart.
+func (r *Runner) logAllowlistChange(current []string) {
+	key := allowlistKey(current)
+	if key == r.lastAllowKey {
+		return
+	}
+	r.lastAllowKey = key
+	if len(current) == 0 {
+		log.Printf("[notify] allowlist cleared — emailing all eligible users")
+	} else {
+		log.Printf("[notify] allowlist changed — now %d address(es)", len(current))
+	}
+}
+
+// allowlistKey is an order-independent fingerprint of an allowlist for change
+// detection.
+func allowlistKey(list []string) string {
+	sorted := append([]string(nil), list...)
+	sort.Strings(sorted)
+	return strings.Join(sorted, ",")
+}
+
+// seedNotifyConfig writes a default notify_config row (lead time, recap hour,
+// empty allowlist) into app_meta on first boot if absent, so the settings are
+// discoverable and editable from the PocketBase dashboard. Existing rows are
+// left untouched.
+func seedNotifyConfig(app core.App) {
+	if _, err := app.FindFirstRecordByFilter("app_meta",
+		"key = {:k}", map[string]any{"k": metaKey}); err == nil {
+		return
+	}
+	col, err := app.FindCollectionByNameOrId("app_meta")
+	if err != nil {
+		return
+	}
+	rec := core.NewRecord(col)
+	rec.Set("key", metaKey)
+	rec.Set("value", map[string]any{
+		"leadHours":    defaultLeadHours,
+		"recapHourUTC": defaultRecapHourUTC,
+		"allowlist":    []string{},
+	})
+	if err := app.Save(rec); err != nil {
+		log.Printf("[notify] seed config: %v", err)
+	}
 }
 
 func (r *Runner) base() baseInfo {
