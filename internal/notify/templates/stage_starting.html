@@ -3,11 +3,14 @@
 {{define "pushBody"}}First kickoff {{.WhenText}} — get your tips in.{{end}}
 {{define "preheader"}}{{.StageName}} starts in about {{.StartsIn}}.{{end}}
 {{define "content"}}
-<h1 style="margin:0 0 12px;font-size:22px;color:#f3f5fb;">{{.StageName}} starts in ~{{.StartsIn}}</h1>
-<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#f3f5fb;">
-The next stage of the tournament is almost here. First kickoff is <strong>{{.WhenText}}</strong>.
+<div style="font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#c8fb50;">Stage starting</div>
+<h1 style="margin:7px 0 14px;font-size:27px;line-height:1.12;font-weight:800;color:#f3f5fb;">{{.StageName}} kicks off in ~{{.StartsIn}}</h1>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#aeb6d0;">
+The next stage of the tournament is almost here. Get your score predictions in before each match locks at kickoff.
 </p>
-<p style="margin:0;font-size:15px;line-height:1.6;color:#8b93b0;">
-Get your score predictions in before each match locks at kickoff.
-</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td bgcolor="#181d2e" style="background:#181d2e;border:1px solid #283047;border-radius:12px;padding:14px 18px;">
+<span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8b93b0;">First kickoff</span><br>
+<span style="font-size:17px;font-weight:700;color:#f3f5fb;">{{.WhenText}}</span>
+</td></tr></table>
 {{end}}

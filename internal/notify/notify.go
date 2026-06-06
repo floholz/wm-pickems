@@ -100,6 +100,24 @@ func Register(app core.App, se *core.ServeEvent) {
 			return e.JSON(http.StatusOK, res)
 		}).Bind(apis.RequireAuth())
 
+		// Render an email in the browser (no auth, dev-only) for fast visual
+		// iteration: /api/dev/notify/preview?event=results_recap[&fmt=text].
+		se.Router.GET("/api/dev/notify/preview", func(e *core.RequestEvent) error {
+			event := e.Request.URL.Query().Get("event")
+			if event == "" {
+				event = "stage_starting"
+			}
+			data := r.sampleData(event)
+			subject, html, text, err := render(event, data)
+			if err != nil {
+				return e.JSON(500, map[string]string{"error": err.Error()})
+			}
+			if e.Request.URL.Query().Get("fmt") == "text" {
+				return e.Blob(http.StatusOK, "text/plain; charset=utf-8", []byte("Subject: "+subject+"\n\n"+text))
+			}
+			return e.Blob(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+		})
+
 		// Send a representative push for one event to the caller's devices, so
 		// each notification type can be previewed on a real device.
 		se.Router.POST("/api/dev/push/sample", func(e *core.RequestEvent) error {
@@ -300,6 +318,7 @@ func (r *Runner) dispatch(ctx context.Context, res *Result, ncol *core.Collectio
 	u *core.Record, event, dedupKey string, data tplData) {
 
 	data.AppName = data.AppNameOr(r.base().appName)
+	data.BaseURL = r.base().url
 	data.SettingsUrl = r.base().url + "/settings"
 
 	r.dispatchEmail(ctx, res, ncol, u, event, dedupKey, data)
@@ -473,7 +492,7 @@ func (r *Runner) SendSample(ctx context.Context, userID, event string) (int, int
 func (r *Runner) sampleData(event string) tplData {
 	base := r.base()
 	when := formatKickoff(time.Date(2026, 6, 11, 19, 0, 0, 0, time.UTC))
-	d := tplData{AppName: base.appName, SettingsUrl: base.url + "/settings"}
+	d := tplData{AppName: base.appName, BaseURL: base.url, SettingsUrl: base.url + "/settings"}
 	switch event {
 	case "stage_starting":
 		d.StageName = "Round of 32"

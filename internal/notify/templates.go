@@ -35,6 +35,7 @@ type rankLine struct {
 // CTA*) are filled by the dispatcher; the rest by each detector.
 type tplData struct {
 	AppName     string
+	BaseURL     string // app origin, for absolute asset URLs (e.g. the logo)
 	SettingsUrl string
 	CTAText     string
 	CTAUrl      string

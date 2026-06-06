@@ -171,6 +171,7 @@ func (r *Runner) tipsData(missing []*core.Record, names, codes map[string]string
 	}
 	return tplData{
 		AppName:     base.appName,
+		BaseURL:     base.url,
 		SettingsUrl: base.url + "/settings",
 		CTAText:     "Enter your tips",
 		CTAUrl:      base.url + "/tips",

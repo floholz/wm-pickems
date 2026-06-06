@@ -3,24 +3,27 @@
 {{define "pushBody"}}{{.Finalized}} match{{if ne .Finalized 1}}es{{end}} resolved · {{.Total}} total{{if .Ranks}} · #{{(index .Ranks 0).Rank}} in {{(index .Ranks 0).League}}{{end}}{{end}}
 {{define "preheader"}}{{.Finalized}} match{{if ne .Finalized 1}}es{{end}} resolved — see how you did.{{end}}
 {{define "content"}}
-<h1 style="margin:0 0 12px;font-size:22px;color:#f3f5fb;">Matchday recap</h1>
-<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#f3f5fb;">
-{{.Finalized}} match{{if ne .Finalized 1}}es{{end}} wrapped up. Here's how it moved your standing:
+<div style="font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#c8fb50;">Matchday recap</div>
+<h1 style="margin:7px 0 14px;font-size:27px;line-height:1.12;font-weight:800;color:#f3f5fb;">You earned +{{.PointsGained}} point{{if ne .PointsGained 1}}s{{end}} today</h1>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#aeb6d0;">
+{{.Finalized}} match{{if ne .Finalized 1}}es{{end}} wrapped up. Here's how it moved your standing.
 </p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 6px;">
 <tr>
-<td style="padding:14px;border:1px solid #283047;border-radius:10px;text-align:center;">
-<div style="font-size:28px;font-weight:800;color:#c8fb50;">+{{.PointsGained}}</div>
-<div style="font-size:12px;color:#8b93b0;text-transform:uppercase;letter-spacing:.05em;">points earned</div>
+<td width="48%" bgcolor="#181d2e" style="background:#181d2e;border:1px solid #283047;border-radius:12px;padding:18px 14px;text-align:center;">
+<div style="font-size:34px;font-weight:800;line-height:1;color:#c8fb50;">+{{.PointsGained}}</div>
+<div style="margin-top:6px;font-size:11px;color:#8b93b0;text-transform:uppercase;letter-spacing:.08em;">points earned</div>
 </td>
-<td style="width:12px;">&nbsp;</td>
-<td style="padding:14px;border:1px solid #283047;border-radius:10px;text-align:center;">
-<div style="font-size:28px;font-weight:800;color:#f3f5fb;">{{.Total}}</div>
-<div style="font-size:12px;color:#8b93b0;text-transform:uppercase;letter-spacing:.05em;">total points</div>
+<td width="4%">&nbsp;</td>
+<td width="48%" bgcolor="#181d2e" style="background:#181d2e;border:1px solid #283047;border-radius:12px;padding:18px 14px;text-align:center;">
+<div style="font-size:34px;font-weight:800;line-height:1;color:#f3f5fb;">{{.Total}}</div>
+<div style="margin-top:6px;font-size:11px;color:#8b93b0;text-transform:uppercase;letter-spacing:.08em;">total points</div>
 </td>
 </tr>
 </table>
-{{range .Ranks}}<p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:#8b93b0;">
-{{.League}}: <strong style="color:#f3f5fb;">#{{.Rank}}</strong> of {{.Of}}
-</p>{{end}}
+{{if .Ranks}}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;">
+{{range .Ranks}}<tr><td style="padding:11px 16px;border-bottom:1px solid #1c2336;font-size:14px;color:#aeb6d0;">
+{{.League}} <span style="float:right;color:#f3f5fb;font-weight:700;">#{{.Rank}} <span style="color:#6f7796;font-weight:400;">of {{.Of}}</span></span>
+</td></tr>{{end}}
+</table>{{end}}
 {{end}}

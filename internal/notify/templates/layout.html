@@ -3,26 +3,41 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
 <title>{{block "subject" .}}{{.AppName}}{{end}}</title>
 </head>
-<body style="margin:0;padding:0;background:#080b14;color:#f3f5fb;font-family:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;">
+<body style="margin:0;padding:0;background:#0b0f1a;color:#f3f5fb;font-family:'Archivo',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{block "preheader" .}}{{end}}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#080b14;padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#0b0f1a" style="background:#0b0f1a;padding:28px 14px;">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#10131f;border:1px solid #283047;border-radius:16px;overflow:hidden;">
-<tr><td style="padding:20px 28px;border-bottom:1px solid #283047;">
-<span style="font-size:18px;font-weight:800;letter-spacing:.02em;color:#c8fb50;">{{.AppName}}</span>
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#10131f;border:1px solid #283047;border-radius:18px;overflow:hidden;">
+
+<!-- accent strip -->
+<tr><td height="5" style="height:5px;line-height:5px;font-size:0;background:#c8fb50;">&nbsp;</td></tr>
+
+<!-- header -->
+<tr><td style="padding:18px 28px;border-bottom:1px solid #1c2336;">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="padding-right:10px;vertical-align:middle;"><img src="{{.BaseURL}}/email/mark.png" width="20" height="35" alt="" style="display:block;border:0;height:35px;width:auto;"></td>
+<td style="vertical-align:middle;font-size:18px;font-weight:800;letter-spacing:.04em;color:#f3f5fb;">WM&nbsp;<span style="color:#c8fb50;">Tips</span></td>
+</tr></table>
 </td></tr>
-<tr><td style="padding:28px;">
+
+<!-- content -->
+<tr><td style="padding:30px 28px 8px;">
 {{block "content" .}}{{end}}
-{{if .CTAUrl}}<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 4px;"><tr><td style="border-radius:999px;background:#c8fb50;">
-<a href="{{.CTAUrl}}" style="display:inline-block;padding:12px 26px;font-weight:700;font-size:15px;color:#08110a;text-decoration:none;">{{.CTAText}}</a>
+{{if .CTAUrl}}<table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0 6px;"><tr><td bgcolor="#c8fb50" style="border-radius:999px;background:#c8fb50;">
+<a href="{{.CTAUrl}}" style="display:inline-block;padding:13px 30px;font-size:15px;font-weight:800;letter-spacing:.01em;color:#08110a;text-decoration:none;">{{.CTAText}} &rarr;</a>
 </td></tr></table>{{end}}
 </td></tr>
-<tr><td style="padding:18px 28px;border-top:1px solid #283047;color:#8b93b0;font-size:12px;line-height:1.6;">
-You're receiving this because you have notifications enabled.
-<a href="{{.SettingsUrl}}" style="color:#8b93b0;text-decoration:underline;">Manage your notifications</a>.
+
+<!-- footer -->
+<tr><td style="padding:20px 28px 24px;border-top:1px solid #1c2336;color:#6f7796;font-size:12px;line-height:1.6;">
+<strong style="color:#8b93b0;">WM Tips</strong> — World Cup 2026 predictions with your friends.<br>
+You're getting this because notifications are on. <a href="{{.SettingsUrl}}" style="color:#8b93b0;text-decoration:underline;">Manage notifications</a>.
 </td></tr>
+
 </table>
 </td></tr>
 </table>

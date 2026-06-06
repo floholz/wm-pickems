@@ -3,17 +3,19 @@
 {{define "pushBody"}}{{if eq .Count 1}}Not yet tipped · kicks off {{(index .Matches 0).WhenText}}{{else}}Not tipped yet — they lock at kickoff.{{end}}{{end}}
 {{define "preheader"}}{{.Count}} upcoming match{{if ne .Count 1}}es{{end}} without a tip — they lock at kickoff.{{end}}
 {{define "content"}}
-<h1 style="margin:0 0 12px;font-size:22px;color:#f3f5fb;">Don't forget your tips</h1>
-<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#f3f5fb;">
-You haven't entered a score prediction for {{if eq .Count 1}}this upcoming match{{else}}these upcoming matches{{end}}.
-Tips lock at kickoff, so get them in soon:
+<div style="font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#c8fb50;">Tip reminder</div>
+<h1 style="margin:7px 0 14px;font-size:27px;line-height:1.12;font-weight:800;color:#f3f5fb;">{{if eq .Count 1}}You haven't tipped this match{{else}}{{.Count}} matches you haven't tipped{{end}}</h1>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#aeb6d0;">
+Tips lock at kickoff — get your scores in before {{if eq .Count 1}}it starts{{else}}they start{{end}}.
 </p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px;">
-{{range .Matches}}<tr>
-<td style="padding:8px 12px;border:1px solid #283047;border-radius:10px;font-size:14px;color:#f3f5fb;">
-<strong>{{.Home}}</strong> vs <strong>{{.Away}}</strong>
-<span style="color:#8b93b0;"> &middot; {{.WhenText}}</span>
-</td></tr><tr><td style="height:8px;line-height:8px;">&nbsp;</td></tr>
+{{range .Matches}}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;"><tr>
+<td bgcolor="#181d2e" align="center" style="background:#181d2e;border:1px solid #283047;border-radius:12px;padding:16px;">
+<table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr>
+<td style="padding:6px 14px;background:#0b0f1a;border:1px solid #2f3a55;border-radius:9px;font-family:'Spline Sans Mono',ui-monospace,monospace;font-size:20px;font-weight:700;letter-spacing:.08em;color:#f3f5fb;">{{.HomeCode}}</td>
+<td style="padding:0 12px;font-size:13px;font-weight:700;color:#6f7796;">vs</td>
+<td style="padding:6px 14px;background:#0b0f1a;border:1px solid #2f3a55;border-radius:9px;font-family:'Spline Sans Mono',ui-monospace,monospace;font-size:20px;font-weight:700;letter-spacing:.08em;color:#f3f5fb;">{{.AwayCode}}</td>
+</tr></table>
+<div style="margin-top:10px;font-size:13px;color:#8b93b0;">{{.Home}} v {{.Away}} &middot; {{.WhenText}}</div>
+</td></tr></table>
 {{end}}
-</table>
 {{end}}
