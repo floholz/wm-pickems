@@ -19,6 +19,7 @@ class Push {
 	supported = $state(false);
 	permission = $state<NotificationPermission>('default');
 	subscribed = $state(false);
+	ready = $state(false); // initial subscription check has completed
 	busy = $state(false);
 	error = $state('');
 
@@ -28,7 +29,10 @@ class Push {
 			'serviceWorker' in navigator &&
 			'PushManager' in window &&
 			'Notification' in window;
-		if (!this.supported) return;
+		if (!this.supported) {
+			this.ready = true;
+			return;
+		}
 		this.permission = Notification.permission;
 		void this.refresh();
 	}
@@ -41,6 +45,8 @@ class Push {
 			this.subscribed = !!sub;
 		} catch {
 			this.subscribed = false;
+		} finally {
+			this.ready = true;
 		}
 	}
 
