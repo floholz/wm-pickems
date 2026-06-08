@@ -21,7 +21,8 @@
 		UserPlus,
 		Bot,
 		ShieldCheck,
-		MessageSquare
+		MessageSquare,
+		ChevronRight
 	} from '@lucide/svelte';
 
 	interface Cfg {
@@ -114,6 +115,28 @@
 			})
 			.catch(() => (error = 'Could not load this league.'))
 			.finally(() => (loaded = true));
+	});
+
+	// Keep the chat unread badge live: bump it when a new message lands in this
+	// league while we're on the league page (the chat itself marks read on open,
+	// and re-mounting the page re-syncs the baseline count).
+	$effect(() => {
+		if (!canChat || !id) return;
+		const lid = id;
+		let unsub: (() => void) | null = null;
+		pb.collection('league_messages')
+			.subscribe(
+				'*',
+				(e) => {
+					if (e.action === 'create' && (e.record as { user?: string }).user !== auth.user?.id) {
+						chatUnread += 1;
+					}
+				},
+				{ filter: `league="${lid}"` }
+			)
+			.then((u) => (unsub = u))
+			.catch(() => {});
+		return () => unsub?.();
 	});
 
 	function enterEdit() {
@@ -282,7 +305,7 @@
 				<h1>{league.name}</h1>
 			{/if}
 		</div>
-		{#if canChat || isOwner || (invite && invite !== 'GLOBAL')}
+		{#if isOwner || (invite && invite !== 'GLOBAL')}
 			<div class="lactions">
 				{#if editing}
 					<button
@@ -298,19 +321,6 @@
 						aria-label="Done editing"><X size={18} /></button
 					>
 				{:else}
-					{#if canChat}
-						<a
-							class="btn secondary icon chatbtn"
-							href={`/leagues/${id}/chat`}
-							aria-label="League chat"
-							title="Chat"
-						>
-							<MessageSquare size={18} />
-							{#if chatUnread > 0}
-								<span class="cdot">{chatUnread > 9 ? '9+' : chatUnread}</span>
-							{/if}
-						</a>
-					{/if}
 					{#if invite && invite !== 'GLOBAL'}
 						<button
 							class="btn secondary sharebtn"
@@ -332,6 +342,17 @@
 			</div>
 		{/if}
 	</div>
+
+	{#if canChat}
+		<a class="chatcta" href={`/leagues/${id}/chat`}>
+			<MessageSquare size={20} class="cc-ico" />
+			<span class="cc-label">League Chat</span>
+			{#if chatUnread > 0}
+				<span class="cc-badge">{chatUnread > 99 ? '99+' : chatUnread}</span>
+			{/if}
+			<ChevronRight size={18} class="cc-cv" />
+		</a>
+	{/if}
 
 	{#if mgmtError}<p class="error">{mgmtError}</p>{/if}
 
@@ -674,24 +695,56 @@
 		width: auto;
 		padding: 0.6rem;
 	}
-	.chatbtn {
-		position: relative;
+	/* Prominent full-width League Chat entry, below the header actions. */
+	.chatcta {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		width: 100%;
+		margin: 0.2rem 0 1rem;
+		padding: 0.85rem 1rem;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 40%),
+			var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		color: var(--text);
+		font-weight: 700;
+		font-size: 1.02rem;
+		transition:
+			border-color 0.15s ease,
+			background 0.15s ease;
 	}
-	.cdot {
-		position: absolute;
-		top: -5px;
-		right: -5px;
-		min-width: 17px;
-		height: 17px;
-		padding: 0 0.2rem;
+	.chatcta:hover {
+		border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+		background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+	}
+	:global(.chatcta .cc-ico) {
+		color: var(--accent);
+		flex: none;
+	}
+	.cc-label {
+		flex: 1;
+	}
+	.cc-badge {
+		flex: none;
+		min-width: 1.3rem;
+		padding: 0.1rem 0.4rem;
 		display: grid;
 		place-items: center;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background: var(--accent);
 		color: var(--accent-fg);
-		font-size: 0.65rem;
+		font-size: 0.78rem;
 		font-weight: 800;
 		font-variant-numeric: tabular-nums;
+	}
+	:global(.chatcta .cc-cv) {
+		color: var(--muted);
+		flex: none;
+	}
+	.chatcta:hover :global(.cc-cv) {
+		color: var(--accent);
 	}
 	/* Header "Share" toggle: reveals the invite/share card. Filled accent when
 	   the card is open so the toggle state is obvious. */
