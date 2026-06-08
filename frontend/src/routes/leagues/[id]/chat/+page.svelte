@@ -36,6 +36,13 @@
 
 	const me = $derived(auth.user?.id ?? '');
 
+	// Touch devices: Enter inserts a newline (sending is via the button only).
+	// Desktop (fine pointer): Enter sends, Shift+Enter is a newline.
+	let coarse = $state(false);
+	$effect(() => {
+		coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+	});
+
 	function avatarUrl(userId: string, avatar?: string): string | null {
 		return avatar
 			? pb.files.getURL({ id: userId, collectionName: 'users' }, avatar)
@@ -149,7 +156,7 @@
 	}
 
 	function onKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && !e.shiftKey) {
+		if (e.key === 'Enter' && !e.shiftKey && !coarse) {
 			e.preventDefault();
 			send();
 		}
@@ -286,11 +293,17 @@
 				bind:value={text}
 				oninput={autosize}
 				onkeydown={onKeydown}
+				onfocus={scrollToBottom}
 				placeholder="Message {clipName(leagueName)}…"
 				rows="1"
 				maxlength="2000"
 			></textarea>
-			<button class="sendbtn" disabled={!text.trim() || sending} aria-label="Send">
+			<button
+				class="sendbtn"
+				disabled={!text.trim() || sending}
+				aria-label="Send"
+				onmousedown={(e) => e.preventDefault()}
+			>
 				<SendHorizontal size={18} />
 			</button>
 		</form>
@@ -310,6 +323,10 @@
 		position: fixed;
 		inset: var(--topbar-h) 0 var(--nav-h) 0;
 		padding: 0.75rem 1rem;
+	}
+	/* Keyboard up: the bottom nav is hidden, so extend to the keyboard top. */
+	:global(body.kb-open) .chat {
+		bottom: var(--kb, 0px);
 	}
 	@media (min-width: 900px) {
 		.chat {

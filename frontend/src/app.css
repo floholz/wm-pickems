@@ -387,6 +387,10 @@ h3 {
 	border-top: 1px solid var(--border);
 	z-index: 50;
 }
+/* Hide the bottom nav while the on-screen keyboard is up (more room to type). */
+body.kb-open .tabbar {
+	display: none;
+}
 
 .siderail {
 	display: none;

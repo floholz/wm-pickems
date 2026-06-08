@@ -11,6 +11,7 @@
 	import NotifyAnnounce from '$lib/components/NotifyAnnounce.svelte';
 	import AnnounceBanner from '$lib/components/AnnounceBanner.svelte';
 	import { serverClock } from '$lib/serverclock.svelte';
+	import '$lib/keyboard'; // tracks the on-screen keyboard → `kb-open` class + `--kb` var
 	import { CircleHelp } from '@lucide/svelte';
 
 	let { children } = $props();
