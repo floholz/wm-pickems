@@ -9,6 +9,7 @@
 	import PwaInstallButton from '$lib/components/PwaInstallButton.svelte';
 	import PwaInstallBanner from '$lib/components/PwaInstallBanner.svelte';
 	import NotifyAnnounce from '$lib/components/NotifyAnnounce.svelte';
+	import AnnounceBanner from '$lib/components/AnnounceBanner.svelte';
 	import { serverClock } from '$lib/serverclock.svelte';
 	import { CircleHelp } from '@lucide/svelte';
 
@@ -88,6 +89,7 @@
 	{#if chrome}
 		<PwaInstallBanner />
 		<NotifyAnnounce />
+		<AnnounceBanner />
 	{/if}
 	{@render children()}
 </div>

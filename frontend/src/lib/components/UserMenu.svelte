@@ -8,7 +8,8 @@
 		FlaskConical,
 		Settings,
 		Shield,
-		Crown
+		Crown,
+		Megaphone
 	} from '@lucide/svelte';
 
 	let {
@@ -61,6 +62,11 @@
 			{#if serverClock.dev}
 				<a class="item" href="/dev" onclick={() => (open = false)}>
 					<FlaskConical size={17} /> Dev tools
+				</a>
+			{/if}
+			{#if auth.isAdmin}
+				<a class="item" href="/admin" onclick={() => (open = false)}>
+					<Megaphone size={17} /> Announcements
 				</a>
 			{/if}
 			{#if auth.isOwner}

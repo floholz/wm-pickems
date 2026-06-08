@@ -120,11 +120,12 @@ func TestRenderPushTipsCompact(t *testing.T) {
 }
 
 func TestRenderPushAllEvents(t *testing.T) {
-	events := []string{"stage_starting", "forecast_reminder", "tips_reminder", "results_recap"}
+	events := []string{"stage_starting", "forecast_reminder", "tips_reminder", "results_recap", "announcement"}
 	data := tplData{
 		StageName: "Round of 32", StartsIn: "12 hours", WhenText: "Sat 18:00 UTC",
 		Count: 2, Matches: []matchLine{{Home: "Brazil", Away: "Spain", WhenText: "soon"}},
 		Finalized: 3, PointsGained: 7, Total: 42,
+		Title: "Heads up", Body: "We shipped a new feature.",
 	}
 	for _, ev := range events {
 		t.Run(ev, func(t *testing.T) {

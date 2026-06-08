@@ -8,6 +8,9 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 async function get<T>(path: string): Promise<T> {
 	return pb.send(path, { method: 'GET' });
 }
+async function del<T>(path: string): Promise<T> {
+	return pb.send(path, { method: 'DELETE' });
+}
 
 export interface LeagueSummary {
 	id: string;
@@ -38,6 +41,25 @@ export interface BotSummary {
 	name: string;
 	avatar?: string;
 	botKind?: string;
+}
+
+export type AnnounceLevel = 'info' | 'success' | 'warn';
+
+export interface Announcement {
+	id: string;
+	title: string;
+	body: string;
+	level: AnnounceLevel;
+	active: boolean;
+	notifiedAt: string; // RFC3339, empty if never broadcast
+	created: string;
+}
+
+export interface AnnouncePayload {
+	title?: string;
+	body?: string;
+	level?: AnnounceLevel;
+	active?: boolean;
 }
 
 export interface OwnerStats {
@@ -92,5 +114,23 @@ export const api = {
 			userId
 		}),
 	// Owner-only app stats dashboard.
-	ownerStats: () => get<OwnerStats>('/api/stats/owner')
+	ownerStats: () => get<OwnerStats>('/api/stats/owner'),
+
+	// Announcements: active list (any signed-in user, for the banner) + the
+	// owner/admin-only management endpoints.
+	activeAnnouncements: () =>
+		get<{ announcements: Announcement[] }>('/api/announce/active'),
+	allAnnouncements: () =>
+		get<{ announcements: Announcement[] }>('/api/admin/announce'),
+	createAnnouncement: (p: AnnouncePayload) =>
+		post<Announcement>('/api/admin/announce', p),
+	updateAnnouncement: (id: string, p: AnnouncePayload) =>
+		post<Announcement>(`/api/admin/announce/${id}`, p),
+	deleteAnnouncement: (id: string) =>
+		del<{ ok: boolean }>(`/api/admin/announce/${id}`),
+	sendAnnouncement: (id: string) =>
+		post<{
+			announcement: Announcement;
+			result: { considered: number; sent: number; failed: number; skipped: number };
+		}>(`/api/admin/announce/${id}/send`, {})
 };

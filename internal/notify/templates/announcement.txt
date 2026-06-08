@@ -1,0 +1,8 @@
+{{.Title}}
+
+{{.Body}}
+
+Open WM Tips: {{.CTAUrl}}
+
+—
+Manage your notifications: {{.SettingsUrl}}

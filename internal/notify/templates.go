@@ -61,6 +61,10 @@ type tplData struct {
 	Ranks        []rankLine
 
 	League string // league name (took-the-lead event)
+
+	// Title/Body back the free-text "announcement" broadcast event.
+	Title string
+	Body  string
 }
 
 // render produces the subject, HTML body, and text body for an event by

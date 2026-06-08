@@ -27,6 +27,8 @@ func pushIcon(event string, data tplData) string {
 		return "/icons/notif/recap.png"
 	case "league_lead":
 		return "/icons/notif/lead.png"
+	case "announcement":
+		return "/icons/notif/default.png"
 	case "kickoff_countdown":
 		switch data.DaysLeft {
 		case 0:

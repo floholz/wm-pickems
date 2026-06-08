@@ -575,6 +575,10 @@ func (r *Runner) sampleData(event string) tplData {
 		d.League = "Friends"
 		d.Total = 48
 		d.CTAText, d.CTAUrl = "See the leaderboard", base.url+"/leagues"
+	case "announcement":
+		d.Title = "New: live match tracker is here"
+		d.Body = "We just shipped a live tracker so you can follow scores in real time. Open the app to check it out and get your tips in before kickoff."
+		d.CTAText, d.CTAUrl = "Open WM Tips", base.url+"/"
 	case "kickoff_countdown":
 		d.DaysLeft = 3
 		d.WhenText = when
