@@ -16,7 +16,54 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 
 	"github.com/floholz/wm-pickems/internal/football"
+	"github.com/floholz/wm-pickems/internal/users"
 )
+
+// syncMetaKey is the app_meta row that stores the last results-sync outcome,
+// surfaced on the owner dashboard.
+const syncMetaKey = "results_sync"
+
+// recordSyncStatus persists the outcome of a sync run (best effort) so the owner
+// dashboard can show when results last updated and whether it succeeded.
+func recordSyncStatus(app core.App, source string, updated int, runErr error) {
+	col, err := app.FindCollectionByNameOrId("app_meta")
+	if err != nil {
+		return
+	}
+	rec, err := app.FindFirstRecordByFilter("app_meta",
+		"key = {:k}", map[string]any{"k": syncMetaKey})
+	if err != nil {
+		rec = core.NewRecord(col)
+		rec.Set("key", syncMetaKey)
+	}
+	val := map[string]any{
+		"at":      time.Now().UTC().Format(time.RFC3339),
+		"source":  source,
+		"updated": updated,
+		"ok":      runErr == nil,
+	}
+	if runErr != nil {
+		val["error"] = runErr.Error()
+	}
+	rec.Set("value", val)
+	if err := app.Save(rec); err != nil {
+		log.Printf("[sync] record status: %v", err)
+	}
+}
+
+// readSyncStatus returns the last recorded sync outcome (nil if none yet).
+func readSyncStatus(app core.App) map[string]any {
+	rec, err := app.FindFirstRecordByFilter("app_meta",
+		"key = {:k}", map[string]any{"k": syncMetaKey})
+	if err != nil {
+		return nil
+	}
+	var out map[string]any
+	if err := rec.UnmarshalJSONField("value", &out); err != nil {
+		return nil
+	}
+	return out
+}
 
 // cronExpr is the default sync cadence: every 30 minutes => max 48 requests/day,
 // comfortably under the API-Football free tier (100/day). Override at runtime
@@ -47,15 +94,16 @@ func canonName(s string) string {
 // pickProvider decides the live-results source: API-Football when its key can
 // actually reach WC2026 (a paid plan — free can't), otherwise the free
 // openfootball JSON. RESULTS_SOURCE=apifootball|openfootball forces it.
-// Returns a label and a sync function (nil = none / manual-only).
-func pickProvider(app core.App) (string, func(context.Context) error) {
+// Returns a label and a sync function (nil = none / manual-only). The sync
+// function reports how many match records changed.
+func pickProvider(app core.App) (string, func(context.Context) (int, error)) {
 	key := os.Getenv("API_FOOTBALL_KEY")
 	mode := os.Getenv("RESULTS_SOURCE")
 
-	apiFn := func(ctx context.Context) error {
+	apiFn := func(ctx context.Context) (int, error) {
 		return SyncOnce(ctx, app, football.New(key))
 	}
-	ofFn := func(ctx context.Context) error {
+	ofFn := func(ctx context.Context) (int, error) {
 		return openfootballSync(ctx, app)
 	}
 
@@ -96,7 +144,9 @@ func Register(app core.App, se *core.ServeEvent) {
 		app.Cron().MustAdd("results-sync", expr, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if err := run(ctx); err != nil {
+			n, err := run(ctx)
+			recordSyncStatus(app, source, n, err)
+			if err != nil {
 				log.Printf("[sync] %v", err)
 			}
 		})
@@ -112,11 +162,61 @@ func Register(app core.App, se *core.ServeEvent) {
 		}
 		ctx, cancel := context.WithTimeout(e.Request.Context(), 30*time.Second)
 		defer cancel()
-		if err := run(ctx); err != nil {
+		n, err := run(ctx)
+		recordSyncStatus(app, source, n, err)
+		if err != nil {
 			return e.JSON(500, map[string]string{"error": err.Error()})
 		}
-		return e.JSON(200, map[string]string{"status": "ok", "source": source})
+		return e.JSON(200, map[string]any{"status": "ok", "source": source, "updated": n})
 	}).Bind(apis.RequireSuperuserAuth())
+
+	// Owner-gated sync dashboard: live status + a manual "sync now" button.
+	sg := se.Router.Group("/api/admin/sync")
+	sg.Bind(apis.RequireAuth())
+	sg.BindFunc(func(e *core.RequestEvent) error {
+		if e.Auth == nil || !users.IsOwner(e.Auth) {
+			return apis.NewForbiddenError("owner only", nil)
+		}
+		return e.Next()
+	})
+
+	// GET /api/admin/sync/status — active source, cadence, last run, and (for
+	// API-Football) the plan + request quota.
+	sg.GET("/status", func(e *core.RequestEvent) error {
+		out := map[string]any{
+			"source":   source,
+			"autoSync": run != nil,
+			"cron":     expr,
+			"lastRun":  readSyncStatus(app),
+		}
+		if source == "api-football" {
+			if key := os.Getenv("API_FOOTBALL_KEY"); key != "" {
+				ctx, cancel := context.WithTimeout(e.Request.Context(), 12*time.Second)
+				defer cancel()
+				if st, err := football.New(key).Status(ctx); err == nil {
+					out["account"] = st
+				} else {
+					out["accountError"] = err.Error()
+				}
+			}
+		}
+		return e.JSON(200, out)
+	})
+
+	// POST /api/admin/sync/run — force a sync now and return the outcome.
+	sg.POST("/run", func(e *core.RequestEvent) error {
+		if run == nil {
+			return e.JSON(400, map[string]string{"error": "no results source configured"})
+		}
+		ctx, cancel := context.WithTimeout(e.Request.Context(), 30*time.Second)
+		defer cancel()
+		n, err := run(ctx)
+		recordSyncStatus(app, source, n, err)
+		if err != nil {
+			return e.JSON(500, map[string]any{"error": err.Error(), "lastRun": readSyncStatus(app)})
+		}
+		return e.JSON(200, map[string]any{"status": "ok", "updated": n, "lastRun": readSyncStatus(app)})
+	})
 
 	// Manual result override (superuser). Body: ftHome,ftAway,etHome,etAway,
 	// penHome,penAway (ints, et/pen optional) and status.
@@ -146,16 +246,17 @@ func Register(app core.App, se *core.ServeEvent) {
 	}).Bind(apis.RequireSuperuserAuth())
 }
 
-// SyncOnce pulls all fixtures once and updates matched records.
-func SyncOnce(ctx context.Context, app core.App, client *football.Client) error {
+// SyncOnce pulls all fixtures once and updates matched records, returning how
+// many records changed.
+func SyncOnce(ctx context.Context, app core.App, client *football.Client) (int, error) {
 	fixtures, err := client.Fixtures(ctx)
 	if err != nil {
-		return fmt.Errorf("fetch fixtures: %w", err)
+		return 0, fmt.Errorf("fetch fixtures: %w", err)
 	}
 
 	matches, err := app.FindRecordsByFilter("matches", "id != ''", "kickoff", 0, 0)
 	if err != nil {
-		return fmt.Errorf("load matches: %w", err)
+		return 0, fmt.Errorf("load matches: %w", err)
 	}
 
 	// Index our matches by the normalized team-name pair (group stage) so we
@@ -208,7 +309,7 @@ func SyncOnce(ctx context.Context, app core.App, client *football.Client) error 
 		log.Printf("[sync] resolve bracket: %v", err)
 	}
 	log.Printf("[sync] fixtures=%d updated=%d", len(fixtures), updated)
-	return nil
+	return updated, nil
 }
 
 // APICheck is a dev diagnostic: fetch a season's fixtures from API-Football

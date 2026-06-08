@@ -37,31 +37,31 @@ func pi(v int) *int { return &v }
 
 // openfootballSync pulls openfootball's live JSON and applies any results.
 // Idempotent: a record is only saved when something actually changed.
-func openfootballSync(ctx context.Context, app core.App) error {
+func openfootballSync(ctx context.Context, app core.App) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ofLiveURL, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	req.Header.Set("User-Agent", "wm-tips/1.0")
 	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
 	if err != nil {
-		return fmt.Errorf("openfootball fetch: %w", err)
+		return 0, fmt.Errorf("openfootball fetch: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("openfootball: status %d", resp.StatusCode)
+		return 0, fmt.Errorf("openfootball: status %d", resp.StatusCode)
 	}
 	var doc struct {
 		Matches []ofLiveMatch `json:"matches"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
-		return err
+		return 0, err
 	}
 
 	byExt := map[string]*core.Record{}
 	recs, err := app.FindRecordsByFilter("matches", "id != ''", "", 0, 0)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	for _, r := range recs {
 		byExt[r.GetString("extId")] = r
@@ -97,7 +97,7 @@ func openfootballSync(ctx context.Context, app core.App) error {
 		}
 	}
 	if err := ResolveBracket(app); err != nil {
-		return err
+		return updated, err
 	}
-	return nil
+	return updated, nil
 }

@@ -64,6 +64,26 @@ export interface AnnouncePayload {
 	highPriority?: boolean;
 }
 
+export interface SyncLastRun {
+	at: string; // RFC3339
+	source: string;
+	updated: number;
+	ok: boolean;
+	error?: string;
+}
+
+export interface SyncStatus {
+	source: string; // 'api-football' | 'openfootball' | 'none'
+	autoSync: boolean;
+	cron: string;
+	lastRun: SyncLastRun | null;
+	account?: {
+		subscription?: { plan?: string; active?: boolean; end?: string };
+		requests?: { current?: number; limit_day?: number };
+	};
+	accountError?: string;
+}
+
 export interface OwnerStats {
 	users: number; // real users (bots excluded)
 	usersLast24h: number;
@@ -117,6 +137,14 @@ export const api = {
 		}),
 	// Owner-only app stats dashboard.
 	ownerStats: () => get<OwnerStats>('/api/stats/owner'),
+
+	// Owner-only results-sync dashboard: status + manual trigger.
+	syncStatus: () => get<SyncStatus>('/api/admin/sync/status'),
+	syncRun: () =>
+		post<{ status?: string; updated?: number; error?: string; lastRun: SyncLastRun | null }>(
+			'/api/admin/sync/run',
+			{}
+		),
 
 	// Announcements: active list (any signed-in user, for the banner) + the
 	// owner/admin-only management endpoints.
