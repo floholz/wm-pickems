@@ -2,7 +2,14 @@
 	import { auth } from '$lib/auth.svelte';
 	import { serverClock } from '$lib/serverclock.svelte';
 	import Avatar from './Avatar.svelte';
-	import { LogOut, ChevronDown, FlaskConical, Settings, Shield } from '@lucide/svelte';
+	import {
+		LogOut,
+		ChevronDown,
+		FlaskConical,
+		Settings,
+		Shield,
+		Crown
+	} from '@lucide/svelte';
 
 	let {
 		align = 'right' as 'right' | 'left',
@@ -56,9 +63,20 @@
 					<FlaskConical size={17} /> Dev tools
 				</a>
 			{/if}
+			{#if auth.isOwner}
+				<a class="item" href="/owner" onclick={() => (open = false)}>
+					<Crown size={17} /> Owner stats
+				</a>
+			{/if}
 			{#if auth.isAdmin}
-				<a class="item" href="/_/" onclick={() => (open = false)}>
-					<Shield size={17} /> Admin dashboard
+				<a
+					class="item"
+					href="/_/"
+					target="_blank"
+					rel="noopener"
+					onclick={() => (open = false)}
+				>
+					<Shield size={17} /> PB Dashboard
 				</a>
 			{/if}
 			<button class="item" onclick={() => auth.logout()}>

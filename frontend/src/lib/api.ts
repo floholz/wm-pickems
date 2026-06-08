@@ -40,6 +40,16 @@ export interface BotSummary {
 	botKind?: string;
 }
 
+export interface OwnerStats {
+	users: number; // real users (bots excluded)
+	usersLast24h: number;
+	activeUsers: number; // >=3 tips or a complete forecast
+	leagues: number; // user-created (Global excluded)
+	activeLeagues: number; // >1 member and some tips
+	pushEnabled: number;
+	notifyDisabled: number; // opted out of >=1 notification
+}
+
 export const api = {
 	createLeague: (name: string) =>
 		post<{ id: string; name: string; inviteCode: string }>(
@@ -80,5 +90,7 @@ export const api = {
 	addBot: (id: string, userId: string) =>
 		post<{ ok: boolean; already?: boolean }>(`/api/leagues/${id}/bots/add`, {
 			userId
-		})
+		}),
+	// Owner-only app stats dashboard.
+	ownerStats: () => get<OwnerStats>('/api/stats/owner')
 };

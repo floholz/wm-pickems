@@ -23,8 +23,16 @@ func Role(u *core.Record) string {
 
 // IsAdmin reports whether the user is an app-level admin. This is distinct from
 // a PocketBase superuser (the backend dashboard login); it gates SPA admin
-// features for normal accounts flagged role=admin.
-func IsAdmin(u *core.Record) bool { return u.GetString("role") == "admin" }
+// features for normal accounts flagged role=admin. Owner inherits admin — an
+// owner is "basically an admin" with the extra owner-only surfaces on top.
+func IsAdmin(u *core.Record) bool {
+	r := u.GetString("role")
+	return r == "admin" || r == "owner"
+}
+
+// IsOwner reports whether the user is the app owner (role=owner) — the
+// super-admin that can see the owner stats page.
+func IsOwner(u *core.Record) bool { return u.GetString("role") == "owner" }
 
 // IsBot reports whether the user is a bot account.
 func IsBot(u *core.Record) bool { return u.GetString("role") == "bot" }

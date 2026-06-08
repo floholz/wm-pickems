@@ -8,7 +8,7 @@ class Auth {
 		name: string;
 		email: string;
 		avatarUrl: string | null;
-		role: string; // "admin" | "bot"; empty => normal member
+		role: string; // "owner" | "admin" | "bot"; empty => normal member
 		// Per-event email toggles; absent/missing entries default to ON.
 		notifyPrefs: Record<string, { email?: boolean }>;
 	} | null>(null);
@@ -45,11 +45,16 @@ class Auth {
 		return this.user !== null;
 	}
 
-	// App-level admin (role=admin), the trust boundary for future admin-only
-	// UI. Distinct from a PocketBase superuser. The server enforces the marker;
-	// this is only for showing/hiding admin affordances.
+	// App-level admin, the trust boundary for admin-only UI. Distinct from a
+	// PocketBase superuser. The server enforces the marker; this is only for
+	// showing/hiding admin affordances. Owner inherits admin.
 	get isAdmin() {
-		return this.user?.role === 'admin';
+		return this.user?.role === 'admin' || this.user?.role === 'owner';
+	}
+
+	// App owner (role=owner) — unlocks the owner stats page.
+	get isOwner() {
+		return this.user?.role === 'owner';
 	}
 
 	async login(identity: string, password: string) {
