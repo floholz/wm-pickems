@@ -170,6 +170,37 @@ func TestApplyConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestChannelGate(t *testing.T) {
+	boolp := func(b bool) *bool { return &b }
+	tests := []struct {
+		name      string
+		stored    storedConfig
+		event, ch string
+		wantAllow bool
+	}{
+		{"defaults allow email", storedConfig{}, "results_recap", "email", true},
+		{"defaults allow push", storedConfig{}, "results_recap", "push", true},
+		{"master email off blocks email", storedConfig{Channels: &storedChannels{Email: boolp(false)}}, "results_recap", "email", false},
+		{"master email off leaves push", storedConfig{Channels: &storedChannels{Email: boolp(false)}}, "results_recap", "push", true},
+		{"master push off blocks push", storedConfig{Channels: &storedChannels{Push: boolp(false)}}, "league_chat", "push", false},
+		{"per-event override blocks one channel",
+			storedConfig{Disabled: map[string]map[string]bool{"results_recap": {"email": true}}}, "results_recap", "email", false},
+		{"per-event override spares other events",
+			storedConfig{Disabled: map[string]map[string]bool{"results_recap": {"email": true}}}, "tips_reminder", "email", true},
+		{"per-event override spares other channel",
+			storedConfig{Disabled: map[string]map[string]bool{"results_recap": {"email": true}}}, "results_recap", "push", true},
+		{"explicit master on", storedConfig{Channels: &storedChannels{Email: boolp(true)}}, "league_lead", "email", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := applyConfigDefaults(tc.stored)
+			if got := cfg.channelAllowed(tc.event, tc.ch); got != tc.wantAllow {
+				t.Fatalf("channelAllowed(%q,%q) = %v, want %v", tc.event, tc.ch, got, tc.wantAllow)
+			}
+		})
+	}
+}
+
 func TestNormalizeEmails(t *testing.T) {
 	got := normalizeEmails([]string{"  Me@Example.com ", "", "  ", "x@Y.COM"})
 	want := []string{"me@example.com", "x@y.com"}

@@ -67,10 +67,10 @@
 				</a>
 			{/if}
 			{#if auth.isAdmin}
-				<a class="item" href="/admin" onclick={() => (open = false)}>
+				<a class="item" href="/announcements" onclick={() => (open = false)}>
 					<Megaphone size={17} /> Announcements
 				</a>
-				<a class="item" href="/console" onclick={() => (open = false)}>
+				<a class="item" href="/admin" onclick={() => (open = false)}>
 					<LayoutDashboard size={17} /> Admin area
 				</a>
 			{/if}

@@ -47,6 +47,10 @@ func registerChatCron(app core.App, r *Runner) {
 
 // chatPass runs one notification sweep, returning how many pushes it sent.
 func (r *Runner) chatPass(ctx context.Context) int {
+	r.gate = readConfig(r.app)
+	if !r.gate.channelAllowed(chatEvent, "push") {
+		return 0 // chat push globally paused
+	}
 	ncol, err := r.notificationsCol()
 	if err != nil {
 		return 0
@@ -158,6 +162,10 @@ func registerChatDigestCron(app core.App, r *Runner) {
 // leagues. Deduped on the globally-latest unread message id, so a user who
 // hasn't read (and has no new messages) isn't nagged again next window.
 func (r *Runner) chatDigestPass(ctx context.Context) int {
+	r.gate = readConfig(r.app)
+	if !r.gate.channelAllowed(chatEvent, "email") {
+		return 0 // chat email digest globally paused
+	}
 	ncol, err := r.notificationsCol()
 	if err != nil {
 		return 0

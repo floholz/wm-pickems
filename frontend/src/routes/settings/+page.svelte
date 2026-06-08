@@ -3,6 +3,8 @@
 	import { push } from '$lib/push.svelte';
 	import { goto } from '$app/navigation';
 	import Avatar from '$lib/components/Avatar.svelte';
+	import { NOTIFY_EVENTS } from '$lib/notify';
+	import { api, type NotifyPolicy } from '$lib/api';
 
 	const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // PocketBase users-avatar default
 
@@ -19,44 +21,6 @@
 	let resetError = $state('');
 
 	// Notification preferences. Each event defaults to ON when no pref is stored.
-	const NOTIFY_EVENTS = [
-		{
-			key: 'kickoff_countdown',
-			label: 'Countdown to kickoff',
-			hint: 'A daily reminder in the final days before the World Cup kicks off.'
-		},
-		{
-			key: 'stage_starting',
-			label: 'Stage starting soon',
-			hint: 'When the next stage (group stage, knockout rounds) is about to begin.'
-		},
-		{
-			key: 'tips_reminder',
-			label: 'Tip reminders',
-			hint: "Before upcoming matches if you haven't entered a tip yet."
-		},
-		{
-			key: 'forecast_reminder',
-			label: 'Forecast deadline',
-			hint: "Before the tournament starts if your Forecast isn't finished."
-		},
-		{
-			key: 'results_recap',
-			label: 'Results recap',
-			hint: 'A daily summary of how your points and ranking moved.'
-		},
-		{
-			key: 'league_lead',
-			label: 'Took the lead',
-			hint: 'When you climb to #1 in one of your leagues.'
-		},
-		{
-			key: 'league_chat',
-			label: 'League chat',
-			hint: 'New messages in your league chats — push is prompt; email is a periodic digest.'
-		}
-	];
-
 	type Channel = 'email' | 'push';
 	let prefs = $state<Record<string, { email?: boolean; push?: boolean }>>({
 		...(auth.user?.notifyPrefs ?? {})
@@ -64,8 +28,26 @@
 	let notifyBusy = $state(false);
 	let notifyError = $state('');
 
-	// Absent pref defaults to ON (matches the backend default-on semantics).
-	const isOn = (key: string, ch: Channel) => prefs[key]?.[ch] !== false;
+	// Global delivery policy (admin-controlled). When a channel is paused
+	// platform-wide its toggles are shown forced-off and disabled, so users see
+	// it's out of their hands rather than silently not arriving.
+	let policy = $state<NotifyPolicy | null>(null);
+	$effect(() => {
+		api.notifyPolicy()
+			.then((p) => (policy = p))
+			.catch(() => (policy = null));
+	});
+	// Force-disabled if the master channel switch is off, or this event's channel
+	// is overridden off. Unknown policy (load failed) = not forced (fail open).
+	const forcedOff = (key: string, ch: Channel) =>
+		!!policy && (policy.channels[ch] === false || policy.disabled[key]?.[ch] === true);
+	const emailPaused = $derived(!!policy && policy.channels.email === false);
+	const pushPaused = $derived(!!policy && policy.channels.push === false);
+
+	// Absent pref defaults to ON (matches the backend default-on semantics). A
+	// forced-off channel reads as off regardless of the stored pref.
+	const isOn = (key: string, ch: Channel) =>
+		!forcedOff(key, ch) && prefs[key]?.[ch] !== false;
 
 	let testMsg = $state('');
 	let testBusy = $state(false);
@@ -86,6 +68,7 @@
 	}
 
 	async function toggleNotify(key: string, ch: Channel) {
+		if (forcedOff(key, ch)) return; // admin-paused — not user-changeable
 		const next = {
 			...prefs,
 			[key]: { ...prefs[key], [ch]: !isOn(key, ch) }
@@ -298,6 +281,17 @@
 		</div>
 
 		{#if notifyError}<p class="error">{notifyError}</p>{/if}
+		{#if emailPaused || pushPaused}
+			<p class="paused-note small">
+				{#if emailPaused && pushPaused}
+					Email and push notifications are temporarily paused by the admins.
+				{:else if emailPaused}
+					Email notifications are temporarily paused by the admins.
+				{:else}
+					Push notifications are temporarily paused by the admins.
+				{/if}
+			</p>
+		{/if}
 		<ul class="notify-list">
 			<li class="notify-row notify-head">
 				<span></span>
@@ -315,11 +309,13 @@
 							type="button"
 							role="switch"
 							aria-checked={isOn(ev.key, ch)}
-							aria-label={`${ev.label} — ${ch}`}
+							aria-label={`${ev.label} — ${ch}${forcedOff(ev.key, ch) ? ' (paused by admins)' : ''}`}
+							title={forcedOff(ev.key, ch) ? 'Paused by the admins' : undefined}
 							class="toggle"
 							class:on={isOn(ev.key, ch)}
+							class:forced={forcedOff(ev.key, ch)}
 							onclick={() => toggleNotify(ev.key, ch)}
-							disabled={notifyBusy || (ch === 'push' && !push.subscribed)}
+							disabled={notifyBusy || forcedOff(ev.key, ch) || (ch === 'push' && !push.subscribed)}
 						>
 							<span class="knob"></span>
 						</button>
@@ -447,9 +443,29 @@
 		opacity: 0.6;
 		cursor: default;
 	}
+	/* Admin-paused: dim further and strike a faint diagonal so it reads as
+	   "locked off by someone else", distinct from a user-chosen off. */
+	.toggle.forced {
+		opacity: 0.4;
+		background: repeating-linear-gradient(
+			-45deg,
+			var(--surface-2),
+			var(--surface-2) 4px,
+			var(--border) 4px,
+			var(--border) 5px
+		);
+	}
 	.toggle.on {
 		background: var(--accent);
 		border-color: var(--accent);
+	}
+	.paused-note {
+		margin: 0 0 0.6rem;
+		padding: 0.5rem 0.7rem;
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--warning) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+		color: var(--text);
 	}
 	.knob {
 		display: block;

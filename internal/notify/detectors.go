@@ -246,7 +246,7 @@ func (r *Runner) writeTipsRows(ncol *core.Collection, userID string, missing []*
 func (r *Runner) tipsEmail(ctx context.Context, res *Result, ncol *core.Collection,
 	u *core.Record, upcoming []*core.Record, names, codes map[string]string, base baseInfo) {
 
-	if !prefEnabled(u, "tips_reminder", "email") {
+	if !r.gate.channelAllowed("tips_reminder", "email") || !prefEnabled(u, "tips_reminder", "email") {
 		return
 	}
 	missing := r.missingTips(u, upcoming, "email")
@@ -275,7 +275,8 @@ func (r *Runner) tipsEmail(ctx context.Context, res *Result, ncol *core.Collecti
 func (r *Runner) tipsPush(ctx context.Context, res *Result, ncol *core.Collection,
 	u *core.Record, upcoming []*core.Record, names, codes map[string]string, base baseInfo) {
 
-	if r.push == nil || !r.push.Enabled() || !prefEnabled(u, "tips_reminder", "push") {
+	if r.push == nil || !r.push.Enabled() ||
+		!r.gate.channelAllowed("tips_reminder", "push") || !prefEnabled(u, "tips_reminder", "push") {
 		return
 	}
 	subs, err := push.Subscriptions(r.app, u.Id)

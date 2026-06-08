@@ -15,15 +15,58 @@ type config struct {
 	// Allowlist gates delivery to specific email addresses (lowercased) for a
 	// gradual rollout. Empty = send to everyone.
 	Allowlist []string
+	// Channels are the master per-channel kill switches. Either false suppresses
+	// every notification on that channel platform-wide (e.g. flip Email off while
+	// the mail provider is suspended). Default: both on.
+	Channels channelFlags
+	// Disabled holds per-event overrides: Disabled[event][channel] == true
+	// suppresses that one event's channel even when the master switch is on.
+	Disabled map[string]map[string]bool
+}
+
+// channelFlags is the resolved master on/off for each delivery channel.
+type channelFlags struct {
+	Email bool
+	Push  bool
+}
+
+// channelAllowed reports whether the platform currently permits delivery of
+// `event` on `channel`. The master switch gates everything on that channel; a
+// per-event override suppresses a single event's channel. User-level prefs are
+// applied separately (and on top) at each send site.
+func (c config) channelAllowed(event, channel string) bool {
+	switch channel {
+	case "email":
+		if !c.Channels.Email {
+			return false
+		}
+	case "push":
+		if !c.Channels.Push {
+			return false
+		}
+	}
+	if ev := c.Disabled[event]; ev != nil && ev[channel] {
+		return false
+	}
+	return true
 }
 
 // storedConfig is the on-disk shape (app_meta "notify_config"). Pointers let us
 // tell "unset" apart from a legitimate zero (e.g. recapHourUTC = 0 = midnight).
 type storedConfig struct {
-	LeadHours        *int     `json:"leadHours"`
-	RecapHourUTC     *int     `json:"recapHourUTC"`
-	CountdownHourUTC *int     `json:"countdownHourUTC"`
-	Allowlist        []string `json:"allowlist"`
+	LeadHours        *int                       `json:"leadHours"`
+	RecapHourUTC     *int                       `json:"recapHourUTC"`
+	CountdownHourUTC *int                       `json:"countdownHourUTC"`
+	Allowlist        []string                   `json:"allowlist"`
+	Channels         *storedChannels            `json:"channels"`
+	Disabled         map[string]map[string]bool `json:"disabled"`
+}
+
+// storedChannels is the on-disk master-switch shape. Pointers distinguish
+// "unset" (defaults to on) from an explicit false.
+type storedChannels struct {
+	Email *bool `json:"email"`
+	Push  *bool `json:"push"`
 }
 
 const (
@@ -57,7 +100,17 @@ func applyConfigDefaults(s storedConfig) config {
 		LeadHours:        defaultLeadHours,
 		RecapHourUTC:     defaultRecapHourUTC,
 		CountdownHourUTC: defaultCountdownHourUTC,
+		Channels:         channelFlags{Email: true, Push: true},
 	}
+	if s.Channels != nil {
+		if s.Channels.Email != nil {
+			c.Channels.Email = *s.Channels.Email
+		}
+		if s.Channels.Push != nil {
+			c.Channels.Push = *s.Channels.Push
+		}
+	}
+	c.Disabled = s.Disabled
 	if s.LeadHours != nil && *s.LeadHours > 0 {
 		c.LeadHours = *s.LeadHours
 	}

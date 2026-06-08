@@ -36,6 +36,11 @@ type Runner struct {
 	// lastAllowKey is the normalized allowlist seen on the previous pass, used
 	// to log when the allowlist changes at runtime.
 	lastAllowKey string
+	// gate is the global delivery policy (master channel switches + per-event
+	// overrides), refreshed at the start of each pass. Safe to share across the
+	// three notification crons: every pass derives it from the same app_meta row,
+	// so a concurrent refresh can only ever make it momentarily stale, never wrong.
+	gate config
 	// verbose enables the per-pass heartbeat log (NOTIFY_LOG_LEVEL=debug).
 	verbose bool
 }
@@ -57,11 +62,13 @@ type Result struct {
 // New builds a Runner, selecting the mail provider once. lastAllowKey is
 // seeded from the current config so the first pass doesn't report a "change".
 func New(app core.App) *Runner {
+	cfg := readConfig(app)
 	return &Runner{
 		app:          app,
 		sender:       mailer.Pick(app),
 		push:         push.NewSender(push.ResolveKeys(app)),
-		lastAllowKey: allowlistKey(readConfig(app).Allowlist),
+		lastAllowKey: allowlistKey(cfg.Allowlist),
+		gate:         cfg,
 		verbose:      strings.EqualFold(os.Getenv("NOTIFY_LOG_LEVEL"), "debug"),
 	}
 }
@@ -80,6 +87,10 @@ func disabled() bool {
 func Register(app core.App, se *core.ServeEvent) {
 	seedNotifyConfig(app)
 	r := New(app)
+
+	// Global delivery-policy endpoints (read for all, write for admins). Wired
+	// unconditionally so the switches work even when the scheduler is disabled.
+	registerPolicy(app, se)
 
 	// NOTIFY_DISABLED skips the scheduler entirely so local/test runs never fire
 	// automated notifications. The dev manual-trigger and preview routes below
@@ -198,6 +209,7 @@ func Register(app core.App, se *core.ServeEvent) {
 func (r *Runner) RunOnce(ctx context.Context) (*Result, error) {
 	now := clock.Now(r.app)
 	cfg := readConfig(r.app)
+	r.gate = cfg
 	r.logAllowlistChange(cfg.Allowlist)
 	lead := time.Duration(cfg.LeadHours) * time.Hour
 	base := r.base()
@@ -296,6 +308,10 @@ func seedNotifyConfig(app core.App) {
 		"recapHourUTC":     defaultRecapHourUTC,
 		"countdownHourUTC": defaultCountdownHourUTC,
 		"allowlist":        []string{},
+		// Master delivery switches (both on) + per-event overrides (none). Surfaced
+		// here so the policy is discoverable/editable from the PB dashboard too.
+		"channels": map[string]any{"email": true, "push": true},
+		"disabled": map[string]any{},
 	})
 	if err := app.Save(rec); err != nil {
 		log.Printf("[notify] seed config: %v", err)
@@ -392,6 +408,11 @@ func (r *Runner) dispatch(ctx context.Context, res *Result, ncol *core.Collectio
 func (r *Runner) dispatchEmail(ctx context.Context, res *Result, ncol *core.Collection,
 	u *core.Record, event, dedupKey string, data tplData) {
 
+	// Global policy gate (e.g. mail provider suspended). Suppressed platform-wide,
+	// not a user choice, so it's silent and uncounted — like push-not-configured.
+	if !r.gate.channelAllowed(event, "email") {
+		return
+	}
 	res.Considered++
 	if !prefEnabled(u, event, "email") {
 		res.Skipped++
@@ -440,6 +461,9 @@ func (r *Runner) dispatchPush(ctx context.Context, res *Result, ncol *core.Colle
 	u *core.Record, event, dedupKey string, data tplData) {
 
 	if r.push == nil || !r.push.Enabled() {
+		return
+	}
+	if !r.gate.channelAllowed(event, "push") {
 		return
 	}
 	subs, err := push.Subscriptions(r.app, u.Id)

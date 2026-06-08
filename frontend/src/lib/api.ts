@@ -8,6 +8,9 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 async function get<T>(path: string): Promise<T> {
 	return pb.send(path, { method: 'GET' });
 }
+async function put<T>(path: string, body: unknown): Promise<T> {
+	return pb.send(path, { method: 'PUT', body });
+}
 async function del<T>(path: string): Promise<T> {
 	return pb.send(path, { method: 'DELETE' });
 }
@@ -94,6 +97,22 @@ export interface AnnouncePayload {
 	active?: boolean;
 	highPriority?: boolean;
 	persistent?: boolean;
+}
+
+export type NotifyChannel = 'email' | 'push';
+
+// Global notification delivery policy (app_meta notify_config). `channels` are
+// the master per-channel kill switches; `disabled[event][channel] === true`
+// suppresses one event's channel even when the master switch is on.
+export interface NotifyPolicy {
+	channels: Record<NotifyChannel, boolean>;
+	disabled: Record<string, Partial<Record<NotifyChannel, boolean>>>;
+}
+
+// PUT body — both sections optional so callers can patch one at a time.
+export interface NotifyPolicyPayload {
+	channels?: Partial<Record<NotifyChannel, boolean>>;
+	disabled?: Record<string, Partial<Record<NotifyChannel, boolean>>>;
 }
 
 export interface SyncLastRun {
@@ -187,6 +206,12 @@ export const api = {
 	chatMarkRead: (leagueId: string) =>
 		post<{ ok: boolean }>(`/api/leagues/${leagueId}/chat/read`, {}),
 	chatUnread: () => get<{ unread: Record<string, number> }>('/api/chat/unread'),
+
+	// Global notification policy: read (any signed-in user, so settings can show
+	// force-disabled toggles) + owner/admin write.
+	notifyPolicy: () => get<NotifyPolicy>('/api/notify/policy'),
+	updateNotifyPolicy: (p: NotifyPolicyPayload) =>
+		put<NotifyPolicy>('/api/admin/notify/policy', p),
 
 	// Owner-only app stats dashboard.
 	ownerStats: () => get<OwnerStats>('/api/stats/owner'),
