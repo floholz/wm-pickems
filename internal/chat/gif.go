@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -89,7 +90,7 @@ func searchGifs(ctx context.Context, q, page string) (map[string]any, error) {
 			continue
 		}
 		gifs = append(gifs, map[string]any{
-			"id":      digStr(item, "id"),
+			"id":      idStr(item),
 			"title":   digStr(item, "title"),
 			"preview": preview,
 			"url":     full,
@@ -104,28 +105,38 @@ func searchGifs(ctx context.Context, q, page string) (map[string]any, error) {
 	return map[string]any{"gifs": gifs, "next": next, "configured": true}, nil
 }
 
-// extractGif pulls (preview, full, w, h) from one KLIPY item, probing the likely
-// shapes best-first. Adjust these paths once a real response is available.
+// extractGif pulls (preview, full, w, h) from one KLIPY item.
+// KLIPY shape: item.file.{hd,md,sm,xs}.{gif,webp,…}.{url,width,height}.
+// The displayed/posted gif uses `sm` (≈220px — matches the in-bubble cap and is
+// far lighter than hd/md); the grid preview uses the tiny `xs`.
 func extractGif(item map[string]any) (preview, full string, w, h int) {
 	full = firstStr(item,
-		[]string{"url"},
-		[]string{"src"},
-		[]string{"file", "hd", "gif", "url"},
+		[]string{"file", "sm", "gif", "url"},
 		[]string{"file", "md", "gif", "url"},
-		[]string{"files", "hd", "gif", "url"},
-		[]string{"files", "md", "gif", "url"},
-		[]string{"files", "gif", "url"},
+		[]string{"file", "hd", "gif", "url"},
 	)
 	preview = firstStr(item,
-		[]string{"file", "sm", "gif", "url"},
-		[]string{"files", "sm", "gif", "url"},
 		[]string{"file", "xs", "gif", "url"},
-		[]string{"proxy_src"},
+		[]string{"file", "sm", "gif", "url"},
 	)
 	if preview == "" {
 		preview = full
 	}
-	return preview, full, digInt(item, "width"), digInt(item, "height")
+	w = intAt(item, "file", "sm", "gif", "width")
+	h = intAt(item, "file", "sm", "gif", "height")
+	return preview, full, w, h
+}
+
+// idStr returns a KLIPY item's id as a string (it comes back as a number),
+// falling back to the slug.
+func idStr(item map[string]any) string {
+	switch v := item["id"].(type) {
+	case string:
+		return v
+	case float64:
+		return strconv.FormatInt(int64(v), 10)
+	}
+	return digStr(item, "slug")
 }
 
 // --- tiny nested-map helpers ---
@@ -156,8 +167,8 @@ func digStr(m map[string]any, key string) string {
 	return s
 }
 
-func digInt(m map[string]any, key string) int {
-	switch v := m[key].(type) {
+func intAt(m map[string]any, path ...string) int {
+	switch v := walk(m, path).(type) {
 	case float64:
 		return int(v)
 	case int:
