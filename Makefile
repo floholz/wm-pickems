@@ -1,4 +1,7 @@
-.PHONY: help install dev-frontend dev-backend build-frontend build run docker clean test
+.PHONY: help install dev-frontend dev-backend build-frontend build run docker clean test tailscale tailscale-off
+
+# Port the local app listens on (matches `make run` / `make dev-backend`).
+TS_PORT ?= 8090
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
@@ -25,6 +28,20 @@ run: build ## Build then run the single binary
 
 test: ## Run Go tests
 	go test ./...
+
+tailscale: ## Expose the local app over Tailscale HTTPS for mobile dev (needs the app running, e.g. `make run`)
+	@command -v tailscale >/dev/null || { echo "tailscale not found — install it first"; exit 1; }
+	@# serve needs operator/root. Tries as-is, falls back to sudo. To drop the
+	@# sudo prompt for good, run once: sudo tailscale set --operator=$$USER
+	tailscale serve --bg $(TS_PORT) || sudo tailscale serve --bg $(TS_PORT)
+	@echo
+	@echo "Serving 127.0.0.1:$(TS_PORT) over HTTPS on your tailnet. Open this on your phone:"
+	@tailscale serve status
+	@echo "Stop with: make tailscale-off"
+
+tailscale-off: ## Stop exposing the local app over Tailscale
+	tailscale serve reset || sudo tailscale serve reset
+	@echo "Tailscale serve cleared."
 
 docker: ## Build the production Docker image
 	docker build -t wm-pickems:latest .
