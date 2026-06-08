@@ -196,11 +196,45 @@
 		}
 	}
 
-	async function remove(m: ChatMessage) {
+	// Two-step inline delete confirm (also makes delete reachable on touch, where
+	// there's no hover): first tap arms it ("Delete?"), second tap deletes.
+	let confirmDel = $state<string | null>(null);
+	let confirmTimer: ReturnType<typeof setTimeout>;
+	// Undo: the last message we deleted, restorable for ~30s.
+	let undoId = $state<string | null>(null);
+	let undoTimer: ReturnType<typeof setTimeout>;
+
+	function onDelClick(m: ChatMessage) {
+		clearTimeout(confirmTimer);
+		if (confirmDel === m.id) {
+			confirmDel = null;
+			doDelete(m);
+		} else {
+			confirmDel = m.id;
+			confirmTimer = setTimeout(() => (confirmDel = null), 4000); // auto-disarm
+		}
+	}
+
+	async function doDelete(m: ChatMessage) {
 		try {
 			const res = await api.chatDelete(id, m.id);
-			// Soft-delete: replace with the cleared/annotated version in place.
 			messages = messages.map((x) => (x.id === m.id ? { ...x, ...res } : x));
+			undoId = m.id;
+			clearTimeout(undoTimer);
+			undoTimer = setTimeout(() => (undoId = null), 30000);
+		} catch {
+			/* ignore */
+		}
+	}
+
+	async function undoDelete() {
+		const mid = undoId;
+		if (!mid) return;
+		undoId = null;
+		clearTimeout(undoTimer);
+		try {
+			const res = await api.chatRestore(id, mid);
+			messages = messages.map((x) => (x.id === mid ? { ...x, ...res } : x));
 		} catch {
 			/* ignore */
 		}
@@ -290,7 +324,14 @@
 								<span class="msgtext">{m.text}</span>
 							{/if}
 							{#if (mine || owner) && !m.deleted}
-								<button class="del" title="Delete" aria-label="Delete" onclick={() => remove(m)}>
+								<button
+									class="del"
+									class:confirm={confirmDel === m.id}
+									title="Delete message"
+									aria-label="Delete message"
+									onclick={() => onDelClick(m)}
+								>
+									{#if confirmDel === m.id}<span class="dellabel">Delete?</span>{/if}
 									<Trash2 size={13} />
 								</button>
 							{/if}
@@ -301,6 +342,13 @@
 			{/each}
 			</div>
 		</div>
+
+		{#if undoId}
+			<div class="undobar" role="status">
+				<span>Message deleted</span>
+				<button class="undobtn" onclick={undoDelete}>Undo</button>
+			</div>
+		{/if}
 
 		<form class="composer" onsubmit={(e) => (e.preventDefault(), send())}>
 			<textarea
@@ -519,20 +567,65 @@
 		vertical-align: 1px;
 	}
 	.del {
-		display: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
 		flex: none;
 		margin-top: 0.05rem;
-		padding: 0;
+		padding: 0.05rem 0.2rem;
 		background: none;
 		border: none;
+		border-radius: var(--radius-pill);
 		color: var(--muted);
+		opacity: 0.5;
 		cursor: pointer;
-	}
-	.bubble:hover .del {
-		display: inline-flex;
+		transition:
+			opacity 0.12s ease,
+			background 0.12s ease;
 	}
 	.del:hover {
+		opacity: 1;
 		color: var(--danger);
+	}
+	/* Armed (second tap deletes): a red "Delete? 🗑" pill. */
+	.del.confirm {
+		opacity: 1;
+		color: #fff;
+		background: var(--danger);
+		padding: 0.1rem 0.5rem;
+	}
+	.dellabel {
+		font-size: 0.72rem;
+		font-weight: 700;
+	}
+
+	.undobar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin: 0.4rem 0;
+		padding: 0.5rem 0.4rem 0.5rem 0.85rem;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		font-size: 0.88rem;
+	}
+	.undobtn {
+		flex: none;
+		padding: 0.35rem 0.9rem;
+		background: transparent;
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--accent);
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		font-size: 0.82rem;
+		cursor: pointer;
+	}
+	.undobtn:hover {
+		background: color-mix(in srgb, var(--accent) 14%, transparent);
 	}
 	.time {
 		font-size: 0.68rem;

@@ -166,7 +166,9 @@ export const api = {
 	chatPost: (leagueId: string, text: string) =>
 		post<ChatMessage>(`/api/leagues/${leagueId}/chat`, { text }),
 	chatDelete: (leagueId: string, msgId: string) =>
-		del<{ ok: boolean }>(`/api/leagues/${leagueId}/chat/${msgId}`),
+		del<ChatMessage>(`/api/leagues/${leagueId}/chat/${msgId}`),
+	chatRestore: (leagueId: string, msgId: string) =>
+		post<ChatMessage>(`/api/leagues/${leagueId}/chat/${msgId}/restore`, {}),
 	chatMarkRead: (leagueId: string) =>
 		post<{ ok: boolean }>(`/api/leagues/${leagueId}/chat/read`, {}),
 	chatUnread: () => get<{ unread: Record<string, number> }>('/api/chat/unread'),

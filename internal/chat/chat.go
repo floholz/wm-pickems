@@ -139,6 +139,35 @@ func Register(app core.App, se *core.ServeEvent) {
 		return e.JSON(http.StatusOK, msgView(rec, users.IsAdmin(e.Auth)))
 	})
 
+	// POST /api/leagues/{id}/chat/{msgId}/restore — author or league owner undoes
+	// a soft-delete: the original text comes back and the deleted flags clear.
+	// Fires a realtime update event. Backs the "Undo" affordance after deleting.
+	g.POST("/leagues/{id}/chat/{msgId}/restore", func(e *core.RequestEvent) error {
+		lid := e.Request.PathValue("id")
+		lg, err := authorize(app, e, lid)
+		if err != nil {
+			return err
+		}
+		rec, err := app.FindRecordById(messages, e.Request.PathValue("msgId"))
+		if err != nil || rec.GetString("league") != lid {
+			return apis.NewNotFoundError("message not found", nil)
+		}
+		if rec.GetString("user") != e.Auth.Id && lg.GetString("owner") != e.Auth.Id {
+			return apis.NewForbiddenError("not allowed", nil)
+		}
+		if rec.GetBool("deleted") {
+			rec.Set("text", rec.GetString("origText"))
+			rec.Set("origText", "")
+			rec.Set("deleted", false)
+			rec.Set("deletedBy", "")
+			rec.Set("deletedAt", "")
+			if err := app.Save(rec); err != nil {
+				return err
+			}
+		}
+		return e.JSON(http.StatusOK, msgView(rec, users.IsAdmin(e.Auth)))
+	})
+
 	// POST /api/leagues/{id}/chat/read — mark this league's chat read (to now).
 	g.POST("/leagues/{id}/chat/read", func(e *core.RequestEvent) error {
 		lid := e.Request.PathValue("id")
