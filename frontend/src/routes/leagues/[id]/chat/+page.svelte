@@ -567,7 +567,7 @@
 		vertical-align: 1px;
 	}
 	.del {
-		display: inline-flex;
+		display: none; /* revealed on hover (or tap, on touch); stays while armed */
 		align-items: center;
 		gap: 0.25rem;
 		flex: none;
@@ -577,14 +577,16 @@
 		border: none;
 		border-radius: var(--radius-pill);
 		color: var(--muted);
-		opacity: 0.5;
 		cursor: pointer;
 		transition:
-			opacity 0.12s ease,
-			background 0.12s ease;
+			background 0.12s ease,
+			color 0.12s ease;
+	}
+	.bubble:hover .del,
+	.del.confirm {
+		display: inline-flex;
 	}
 	.del:hover {
-		opacity: 1;
 		color: var(--danger);
 	}
 	/* Armed (second tap deletes): a red "Delete? 🗑" pill. */
@@ -599,6 +601,8 @@
 		font-weight: 700;
 	}
 
+	/* Transient toast — translucent + frosted so it reads as an overlay, not a
+	   message bubble. */
 	.undobar {
 		display: flex;
 		align-items: center;
@@ -606,9 +610,11 @@
 		gap: 0.75rem;
 		margin: 0.4rem 0;
 		padding: 0.5rem 0.4rem 0.5rem 0.85rem;
-		background: var(--surface-2);
-		border: 1px solid var(--border);
+		background: color-mix(in srgb, var(--bg) 55%, transparent);
+		border: 1px solid color-mix(in srgb, var(--muted) 20%, transparent);
 		border-radius: var(--radius);
+		backdrop-filter: blur(10px);
+		color: var(--muted);
 		font-size: 0.88rem;
 	}
 	.undobtn {
