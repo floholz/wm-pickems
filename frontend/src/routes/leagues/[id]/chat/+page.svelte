@@ -205,6 +205,7 @@
 		<p class="muted pad">Loading…</p>
 	{:else}
 		<div class="messages" bind:this={listEl}>
+			<div class="msgs-inner">
 			{#if hasMore}
 				<button class="older" onclick={loadOlder} disabled={loadingOlder}>
 					{loadingOlder ? 'Loading…' : 'Load older messages'}
@@ -254,6 +255,7 @@
 					</div>
 				</div>
 			{/each}
+			</div>
 		</div>
 
 		<form class="composer" onsubmit={(e) => (e.preventDefault(), send())}>
@@ -330,11 +332,20 @@
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
 		padding: 0.9rem 0.1rem 0.6rem;
 	}
+	/* Anchor messages to the bottom: when they don't fill the area they sit just
+	   above the composer (so they stay readable when the mobile keyboard pushes
+	   the view up); when they overflow, the auto margin collapses and it scrolls. */
+	.msgs-inner {
+		margin-top: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
 	.empty {
-		margin: auto;
+		text-align: center;
+		padding: 0.5rem 0;
 	}
 	.older {
 		align-self: center;
