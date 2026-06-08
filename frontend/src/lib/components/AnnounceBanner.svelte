@@ -155,8 +155,6 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		overflow: hidden;
-		background: var(--surface-2);
-		color: var(--text);
 	}
 	.pahead {
 		display: flex;
@@ -164,9 +162,8 @@
 		gap: 0.5rem;
 		width: 100%;
 		padding: 0.55rem 0.85rem;
-		background: transparent;
 		border: none;
-		color: inherit;
+		color: var(--text);
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
@@ -184,52 +181,70 @@
 		flex-shrink: 0;
 		opacity: 0.75;
 	}
-	/* Body grows out of the ribbon: same background, separated by a slim rule. */
+	/* Body grows out of the header: the calm, muted tint of the static cards —
+	   NOT the bold header fill — separated by a slim rule. */
 	.pabody {
 		padding: 0.6rem 0.85rem 0.7rem;
 		border-top: 1px solid var(--border);
 		font-size: 0.88rem;
 		line-height: 1.55;
 		white-space: pre-line;
+		color: var(--text);
+		background: var(--surface);
 	}
 
-	/* Info — calm: subtle surface, accent left rule, muted body. */
+	/* Info — subtle throughout. */
 	.pa.info {
 		border-left: 3px solid color-mix(in srgb, var(--muted) 45%, var(--border));
+	}
+	.pa.info .pahead {
+		background: var(--surface-2);
 	}
 	.pa.info .pabody {
 		color: var(--muted);
 	}
-	/* Highlight — the landing lock-countdown look: lime gradient, dark ink. */
+	/* Highlight — bold lime header (landing-countdown look), calm lime body. */
 	.pa.success {
+		border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+	}
+	.pa.success .pahead {
 		background: linear-gradient(90deg, var(--accent), var(--accent-2));
 		color: var(--accent-ink);
-		border-color: transparent;
 	}
 	.pa.success .pabody {
-		border-color: rgba(8, 17, 10, 0.18);
+		background: color-mix(in srgb, var(--accent) 13%, var(--surface));
 	}
-	/* Warning — solid amber, dark ink. */
+	/* Warning — bold amber header, calm amber body. */
 	.pa.warn {
+		border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+	}
+	.pa.warn .pahead {
 		background: var(--warning);
 		color: #20160a;
-		border-color: transparent;
 	}
 	.pa.warn .pabody {
-		border-color: rgba(32, 22, 10, 0.22);
+		background: color-mix(in srgb, var(--warning) 12%, var(--surface));
 	}
 
 	/* On mobile the pinned ribbon spans edge-to-edge — break out of the
 	   app-shell's 1rem gutter (safe: the shell is overflow-x: clip), keep 1rem
-	   inner padding so text still lines up with page content. */
+	   inner padding so text still lines up with page content. The collapsed
+	   header is a flush bar; expanded, only the lower corners round so the body
+	   reads as a panel hanging from the header. */
 	@media (max-width: 899px) {
 		.pinned {
 			margin-inline: -1rem;
 		}
 		.pa {
 			border-radius: 0;
-			border-left: none;
-			border-right: none;
+			border-left-width: 0;
+			border-right-width: 0;
+		}
+		.pa.info {
+			border-left-width: 0;
+		}
+		.pa.open {
+			border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 		}
 		.pahead,
 		.pabody {
