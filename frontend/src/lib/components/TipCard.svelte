@@ -8,6 +8,7 @@
 		type PerfectScorers
 	} from '$lib/tips.svelte';
 	import Flag from './Flag.svelte';
+	import Scoreline from './Scoreline.svelte';
 	import Stepper from './Stepper.svelte';
 	import { Lock, ChevronDown, Check, Users, Target } from '@lucide/svelte';
 
@@ -27,9 +28,6 @@
 	let played = $derived(match.status === 'finished' || !!match.finalizedAt);
 	let live = $derived(match.status === 'live');
 	let pts = $derived(tipsStore.scores[match.id]);
-	let advancedName = $derived(
-		isKO && match.advancer ? (tipsStore.team(match.advancer)?.name ?? '') : ''
-	);
 
 	// Editable working copy.
 	let ftH = $state(0);
@@ -143,6 +141,13 @@
 	}
 	let H = $derived(label('home'));
 	let A = $derived(label('away'));
+
+	// Map an advancing team id to its side, for the Scoreline winner arrow.
+	function winnerSide(advancer: string): '' | 'home' | 'away' {
+		if (advancer && advancer === match.homeTeam) return 'home';
+		if (advancer && advancer === match.awayTeam) return 'away';
+		return '';
+	}
 </script>
 
 <div class="tc card" class:locked>
@@ -157,9 +162,27 @@
 			</span>
 			<span class="score digits">
 				{#if played || live}
-					<b>{match.ftHome}</b><span class="cln">:</span><b>{match.ftAway}</b>
+					<b
+						><Scoreline
+							home={match.ftHome}
+							away={match.ftAway}
+							etHome={match.etHome}
+							etAway={match.etAway}
+							et={isKO && played && match.ftHome === match.ftAway}
+							winner={winnerSide(match.advancer)}
+						/></b
+					>
 				{:else if existing}
-					<span class="pred">{existing.ftHome}<span class="cln">:</span>{existing.ftAway}</span>
+					<span class="pred"
+						><Scoreline
+							home={existing.ftHome}
+							away={existing.ftAway}
+							etHome={existing.etHome}
+							etAway={existing.etAway}
+							et={isKO && existing.ftHome === existing.ftAway}
+							winner={winnerSide(existing.advancer)}
+						/></span
+					>
 				{:else}
 					<span class="muted">–:–</span>
 				{/if}
@@ -200,23 +223,19 @@
 			{#if isKO && !resolved}
 				<p class="muted">Opens once the matchup is decided.</p>
 			{:else if locked}
-				{#if played && advancedName}
-					<p class="resline muted">
-						Result <b>{match.ftHome}:{match.ftAway}</b> · advanced:
-						<b>{advancedName}</b>
-					</p>
-				{/if}
 				{#if existing}
 					<div class="yourtip" class:scored={played}>
 						<span class="ylabel">Your tip</span>
 						<span class="yscore digits"
-							>{existing.ftHome}<span class="cln">:</span>{existing.ftAway}</span
+							><Scoreline
+								home={existing.ftHome}
+								away={existing.ftAway}
+								etHome={existing.etHome}
+								etAway={existing.etAway}
+								et={isKO && existing.ftHome === existing.ftAway}
+								winner={winnerSide(existing.advancer)}
+							/></span
 						>
-						{#if isKO && existing.advancer}
-							<span class="yadv"
-								>→ {tipsStore.team(existing.advancer)?.name ?? '—'}</span
-							>
-						{/if}
 						<span class="spacer"></span>
 						{#if played && pts !== undefined}
 							<span class="ypts" class:ok={pts > 0}
@@ -245,12 +264,16 @@
 								{#each friends as f (f.userId)}
 									<tr>
 										<td>{f.name}</td>
-										<td class="num">{f.ftHome}:{f.ftAway}</td>
-										<td class="muted">
-											{#if f.advancer}
-												→ {tipsStore.team(f.advancer)?.name ?? ''}
-											{/if}
-										</td>
+										<td class="num digits"
+											><Scoreline
+												home={f.ftHome}
+												away={f.ftAway}
+												etHome={f.etHome}
+												etAway={f.etAway}
+												et={isKO && f.ftHome === f.ftAway}
+												winner={winnerSide(f.advancer)}
+											/></td
+										>
 									</tr>
 								{/each}
 							</tbody>
@@ -457,10 +480,6 @@
 		color: var(--muted);
 		font-size: 0.95rem;
 	}
-	.resline {
-		margin: 0.4rem 0 0.7rem;
-		font-size: 0.9rem;
-	}
 	.yourtip {
 		display: flex;
 		align-items: center;
@@ -485,10 +504,6 @@
 	.yscore {
 		font-size: 1.25rem;
 		font-weight: 800;
-	}
-	.yadv {
-		font-size: 0.85rem;
-		color: var(--muted);
 	}
 	.ypts {
 		font-family: var(--font-mono);

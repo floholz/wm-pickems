@@ -218,8 +218,42 @@ func makeBots(app core.App, count int, leagueIDs []string) ([]string, error) {
 			t := core.NewRecord(tipsCol)
 			t.Set("user", u.Id)
 			t.Set("match", m.Id)
-			t.Set("ftHome", rng.Intn(5))
-			t.Set("ftAway", rng.Intn(5))
+			fh, fa := rng.Intn(5), rng.Intn(5)
+			// Knockouts need a winner: the dev path bypasses validateAndDerive,
+			// so resolve a 90' draw here (extra time / penalties) and set the
+			// advancer ourselves. A plain KO draw with no ET is not a valid tip.
+			if m.GetString("stage") != "group" {
+				home, away := m.GetString("homeTeam"), m.GetString("awayTeam")
+				switch {
+				case fh > fa:
+					t.Set("advancer", home)
+				case fa > fh:
+					t.Set("advancer", away)
+				default:
+					// Level after 90' — go to extra time (>= the 90' goals).
+					eh, ea := fh, fa
+					switch rng.Intn(3) {
+					case 0:
+						eh++ // decided in ET, home
+						t.Set("advancer", home)
+					case 1:
+						ea++ // decided in ET, away
+						t.Set("advancer", away)
+					default: // still level — penalties
+						if rng.Intn(2) == 0 {
+							t.Set("penWinner", home)
+							t.Set("advancer", home)
+						} else {
+							t.Set("penWinner", away)
+							t.Set("advancer", away)
+						}
+					}
+					t.Set("etHome", eh)
+					t.Set("etAway", ea)
+				}
+			}
+			t.Set("ftHome", fh)
+			t.Set("ftAway", fa)
 			if err := app.Save(t); err != nil {
 				return created, err
 			}
