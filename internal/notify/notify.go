@@ -455,9 +455,14 @@ func (r *Runner) dispatchPush(ctx context.Context, res *Result, ncol *core.Colle
 		return
 	}
 
-	ok, sendErr := r.sendPush(ctx, subs, push.Notification{
+	n := push.Notification{
 		Title: title, Body: body, URL: toPath(data.CTAUrl), Tag: event, Icon: pushIcon(event, data),
-	})
+	}
+	if data.HighPriority {
+		n.Urgency = push.UrgencyHigh
+		n.RequireInteraction = true
+	}
+	ok, sendErr := r.sendPush(ctx, subs, n)
 	if ok == 0 {
 		rec.Set("status", "failed")
 		if sendErr != nil {

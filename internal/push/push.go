@@ -14,6 +14,11 @@ import (
 // 410) and should be pruned by the caller.
 var ErrGone = errors.New("push: subscription gone")
 
+// UrgencyHigh is the Web Push "high" delivery urgency: the push service wakes
+// the device promptly even when it's dozing or in battery-saver. Assign to
+// Notification.Urgency for high-priority messages.
+const UrgencyHigh = "high"
+
 // Subscription is a single browser push endpoint.
 type Subscription struct {
 	Endpoint string
@@ -28,6 +33,13 @@ type Notification struct {
 	URL   string `json:"url"`
 	Tag   string `json:"tag,omitempty"`
 	Icon  string `json:"icon,omitempty"`
+	// RequireInteraction asks the service worker to keep the notification on
+	// screen until the user acts on it (used for high-priority messages).
+	RequireInteraction bool `json:"requireInteraction,omitempty"`
+	// Urgency is the Web Push delivery urgency ("high" delivers promptly even on
+	// dozing/battery-saver devices). Empty = the push service's default. Not part
+	// of the payload — it's a header on the push request.
+	Urgency string `json:"-"`
 }
 
 // Sender delivers a Notification to one subscription.
@@ -65,6 +77,8 @@ func (s *webPushSender) Send(ctx context.Context, sub Subscription, n Notificati
 		VAPIDPublicKey:  s.keys.Public,
 		VAPIDPrivateKey: s.keys.Private,
 		TTL:             24 * 60 * 60, // 1 day; reminders are time-bound
+		// Empty Urgency lets the lib omit the header (push-service default).
+		Urgency: webpush.Urgency(n.Urgency),
 	})
 	if err != nil {
 		return err

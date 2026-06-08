@@ -29,12 +29,14 @@ func Broadcast(ctx context.Context, app core.App, ann *core.Record) (*Result, er
 
 	base := r.base()
 	dedupKey := "announcement:" + ann.Id
+	highPriority := ann.GetBool("highPriority")
 	for _, u := range recipients {
 		data := tplData{
-			Title:   ann.GetString("title"),
-			Body:    ann.GetString("body"),
-			CTAText: "Open WM Tips",
-			CTAUrl:  base.url + "/",
+			Title:        ann.GetString("title"),
+			Body:         ann.GetString("body"),
+			HighPriority: highPriority,
+			CTAText:      "Open WM Tips",
+			CTAUrl:       base.url + "/",
 		}
 		r.dispatch(ctx, res, ncol, u, "announcement", dedupKey, data)
 	}

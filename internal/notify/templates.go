@@ -65,6 +65,9 @@ type tplData struct {
 	// Title/Body back the free-text "announcement" broadcast event.
 	Title string
 	Body  string
+	// HighPriority lifts the push to high urgency + keeps it on screen until
+	// acted on (announcement broadcasts that opt in).
+	HighPriority bool
 }
 
 // render produces the subject, HTML body, and text body for an event by

@@ -95,6 +95,7 @@ sw.addEventListener('push', (e) => {
 		url?: string;
 		tag?: string;
 		icon?: string;
+		requireInteraction?: boolean;
 	} = {};
 	try {
 		data = e.data?.json() ?? {};
@@ -102,17 +103,20 @@ sw.addEventListener('push', (e) => {
 		data = { body: e.data?.text() };
 	}
 	const title = data.title || 'WM Pickems';
-	e.waitUntil(
-		sw.registration.showNotification(title, {
-			body: data.body ?? '',
-			// Per-event contextual icon (server-provided); monochrome badge for
-			// the status bar.
-			icon: data.icon || '/icons/notif/default.png',
-			badge: '/icons/badge.png',
-			tag: data.tag,
-			data: { url: data.url || '/' }
-		})
-	);
+	// High-priority messages (requireInteraction) stay on screen until acted on
+	// and buzz; `vibrate` isn't in the TS NotificationOptions type yet.
+	const opts: NotificationOptions & { vibrate?: number[] } = {
+		body: data.body ?? '',
+		// Per-event contextual icon (server-provided); monochrome badge for the
+		// status bar.
+		icon: data.icon || '/icons/notif/default.png',
+		badge: '/icons/badge.png',
+		tag: data.tag,
+		data: { url: data.url || '/' },
+		requireInteraction: data.requireInteraction ?? false
+	};
+	if (data.requireInteraction) opts.vibrate = [200, 100, 200];
+	e.waitUntil(sw.registration.showNotification(title, opts));
 });
 
 // Focus an existing tab (or open one) at the notification's URL on click.

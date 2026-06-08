@@ -84,6 +84,7 @@ func Register(app core.App, se *core.ServeEvent) {
 		rec.Set("body", bodyText)
 		rec.Set("level", level)
 		rec.Set("active", body.activeOrDefault())
+		rec.Set("highPriority", body.HighPriority != nil && *body.HighPriority)
 		if err := app.Save(rec); err != nil {
 			return err
 		}
@@ -111,6 +112,9 @@ func Register(app core.App, se *core.ServeEvent) {
 		}
 		if body.Active != nil {
 			rec.Set("active", *body.Active)
+		}
+		if body.HighPriority != nil {
+			rec.Set("highPriority", *body.HighPriority)
 		}
 		if err := app.Save(rec); err != nil {
 			return err
@@ -158,10 +162,11 @@ func Register(app core.App, se *core.ServeEvent) {
 // payload is the create/update body. Pointers distinguish "absent" (update keeps
 // the stored value) from an explicit value.
 type payload struct {
-	Title  *string `json:"title"`
-	Body   *string `json:"body"`
-	Level  *string `json:"level"`
-	Active *bool   `json:"active"`
+	Title        *string `json:"title"`
+	Body         *string `json:"body"`
+	Level        *string `json:"level"`
+	Active       *bool   `json:"active"`
+	HighPriority *bool   `json:"highPriority"`
 }
 
 func (p payload) normalize() (title, body, level string, err error) {
@@ -199,13 +204,14 @@ func find(app core.App, id string) (*core.Record, error) {
 
 func view(r *core.Record) map[string]any {
 	return map[string]any{
-		"id":         r.Id,
-		"title":      r.GetString("title"),
-		"body":       r.GetString("body"),
-		"level":      r.GetString("level"),
-		"active":     r.GetBool("active"),
-		"notifiedAt": notifiedAt(r),
-		"created":    r.GetDateTime("created").Time().UTC().Format(time.RFC3339),
+		"id":           r.Id,
+		"title":        r.GetString("title"),
+		"body":         r.GetString("body"),
+		"level":        r.GetString("level"),
+		"active":       r.GetBool("active"),
+		"highPriority": r.GetBool("highPriority"),
+		"notifiedAt":   notifiedAt(r),
+		"created":      r.GetDateTime("created").Time().UTC().Format(time.RFC3339),
 	}
 }
 

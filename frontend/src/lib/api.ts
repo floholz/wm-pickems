@@ -51,6 +51,7 @@ export interface Announcement {
 	body: string;
 	level: AnnounceLevel;
 	active: boolean;
+	highPriority: boolean; // high-urgency push when broadcast
 	notifiedAt: string; // RFC3339, empty if never broadcast
 	created: string;
 }
@@ -60,6 +61,7 @@ export interface AnnouncePayload {
 	body?: string;
 	level?: AnnounceLevel;
 	active?: boolean;
+	highPriority?: boolean;
 }
 
 export interface OwnerStats {

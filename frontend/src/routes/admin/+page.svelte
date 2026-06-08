@@ -15,7 +15,8 @@
 		Pencil,
 		Trash2,
 		Check,
-		Plus
+		Plus,
+		Zap
 	} from '@lucide/svelte';
 
 	// Gate: anyone who isn't an owner/admin goes home. auth hydrates
@@ -34,6 +35,7 @@
 	let body = $state('');
 	let level = $state<AnnounceLevel>('info');
 	let active = $state(true);
+	let highPriority = $state(false);
 	let saving = $state(false);
 	let formError = $state('');
 
@@ -73,6 +75,7 @@
 		body = '';
 		level = 'info';
 		active = true;
+		highPriority = false;
 		formError = '';
 	}
 
@@ -82,6 +85,7 @@
 		body = a.body;
 		level = a.level;
 		active = a.active;
+		highPriority = a.highPriority;
 		formError = '';
 		if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
 	}
@@ -94,7 +98,7 @@
 		}
 		saving = true;
 		try {
-			const payload = { title: title.trim(), body: body.trim(), level, active };
+			const payload = { title: title.trim(), body: body.trim(), level, active, highPriority };
 			if (editId) {
 				const updated = await api.updateAnnouncement(editId, payload);
 				items = items.map((a) => (a.id === editId ? updated : a));
@@ -203,6 +207,14 @@
 				<span>Show banner now</span>
 			</label>
 		</div>
+		<label class="chk hp">
+			<input type="checkbox" bind:checked={highPriority} />
+			<span><Zap size={14} /> High-priority push</span>
+		</label>
+		<p class="hp-hint">
+			Only affects "Send as notification": delivers at high urgency (reaches
+			dozing phones promptly) and keeps the alert on screen until tapped.
+		</p>
 		{#if formError}<p class="err">{formError}</p>{/if}
 		<div class="actions">
 			{#if editId}
@@ -232,6 +244,11 @@
 							<span class="pill on">Live</span>
 						{:else}
 							<span class="pill off">Hidden</span>
+						{/if}
+						{#if a.highPriority}
+							<span class="pill hp" title="High-priority push when broadcast">
+								<Zap size={12} /> Priority
+							</span>
 						{/if}
 						{#if a.notifiedAt}
 							<span class="pill sent" title={`Notified ${fmtDate(a.notifiedAt)}`}>
@@ -351,6 +368,21 @@
 		height: 16px;
 		accent-color: var(--accent);
 	}
+	.chk.hp {
+		margin-top: 0.9rem;
+		padding-bottom: 0;
+	}
+	.chk.hp span {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+	.hp-hint {
+		margin: 0.3rem 0 0 1.6rem;
+		font-size: 0.78rem;
+		line-height: 1.45;
+		color: var(--muted);
+	}
 	.actions {
 		display: flex;
 		justify-content: flex-end;
@@ -426,6 +458,10 @@
 	.pill.sent {
 		color: var(--accent);
 		border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+	}
+	.pill.hp {
+		color: var(--warning);
+		border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
 	}
 	.when {
 		margin-left: auto;
