@@ -172,13 +172,14 @@
 		}
 	}
 
-	// Keep the composer placeholder to one line: clip a long league name (at a
-	// word boundary where possible) so "Message <name>…" doesn't wrap/overflow.
+	// Keep the composer placeholder to one line: hard-cap a long league name to n
+	// chars, preferring a word boundary only when one lands far enough in (so a
+	// single very long word still gets cut). "Message <name>…" then never wraps.
 	function clipName(s: string, n = 20): string {
 		if (s.length <= n) return s;
 		const cut = s.slice(0, n).trimEnd();
 		const sp = cut.lastIndexOf(' ');
-		return sp >= 8 ? cut.slice(0, sp) : cut;
+		return sp >= n / 2 ? cut.slice(0, sp) : cut;
 	}
 
 	function fmtTime(iso: string): string {
