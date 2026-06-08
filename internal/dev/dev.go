@@ -150,7 +150,47 @@ func simulate(app core.App, simNow time.Time) error {
 			break
 		}
 	}
+	if err := backfillBotAdvancers(app); err != nil {
+		return err
+	}
 	return scoring.Recompute(app)
+}
+
+// backfillBotAdvancers sets the advancer on dev tips whose knockout match has
+// since resolved its teams. Bot tips are created before the bracket is known,
+// so they store no advancer; without it their knockout "correct result" never
+// scores. Dev KO tips are decisive, so the advancer is the higher-scoring side.
+// Only empty-advancer tips are touched — real user KO tips always carry one.
+func backfillBotAdvancers(app core.App) error {
+	kos, err := app.FindRecordsByFilter("matches",
+		"stage != 'group' && homeTeam != '' && awayTeam != ''", "", 0, 0)
+	if err != nil {
+		return err
+	}
+	tips.SetBypass(true)
+	defer tips.SetBypass(false)
+	for _, m := range kos {
+		ts, err := app.FindRecordsByFilter("tips",
+			"match = {:m} && advancer = ''", "", 0, 0, map[string]any{"m": m.Id})
+		if err != nil {
+			return err
+		}
+		for _, t := range ts {
+			fh, fa := t.GetInt("ftHome"), t.GetInt("ftAway")
+			if fh == fa {
+				continue // not decisive — winner unknowable from the score alone
+			}
+			if fh > fa {
+				t.Set("advancer", m.GetString("homeTeam"))
+			} else {
+				t.Set("advancer", m.GetString("awayTeam"))
+			}
+			if err := app.Save(t); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // makeBots creates `count` bot users, each with a complete consistent
