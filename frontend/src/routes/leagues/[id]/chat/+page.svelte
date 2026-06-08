@@ -22,7 +22,17 @@
 	let sending = $state(false);
 
 	let listEl = $state<HTMLDivElement | null>(null);
+	let taEl = $state<HTMLTextAreaElement | null>(null);
 	let unsub: (() => void) | null = null;
+
+	// Grow the composer with its content up to the CSS max-height (~5 lines),
+	// after which it scrolls. Reset to min when cleared.
+	function autosize() {
+		const el = taEl;
+		if (!el) return;
+		el.style.height = 'auto';
+		el.style.height = `${el.scrollHeight}px`;
+	}
 
 	const me = $derived(auth.user?.id ?? '');
 
@@ -127,6 +137,8 @@
 		try {
 			const msg = await api.chatPost(id, body);
 			text = '';
+			await tick();
+			autosize(); // collapse back to one line
 			if (!messages.some((m) => m.id === msg.id)) messages = [...messages, msg];
 			scrollToBottom();
 		} catch (e) {
@@ -270,7 +282,9 @@
 
 		<form class="composer" onsubmit={(e) => (e.preventDefault(), send())}>
 			<textarea
+				bind:this={taEl}
 				bind:value={text}
+				oninput={autosize}
 				onkeydown={onKeydown}
 				placeholder="Message {clipName(leagueName)}…"
 				rows="1"
@@ -495,8 +509,9 @@
 	.composer textarea {
 		flex: 1;
 		resize: none;
-		max-height: 8rem;
 		min-height: 2.6rem;
+		max-height: 7.6rem; /* ~5 lines, then scroll */
+		overflow-y: auto;
 		padding: 0.6rem 0.8rem;
 		line-height: 1.4;
 		font: inherit;

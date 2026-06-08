@@ -21,8 +21,7 @@
 		UserPlus,
 		Bot,
 		ShieldCheck,
-		MessageSquare,
-		ChevronRight
+		MessageSquare
 	} from '@lucide/svelte';
 
 	interface Cfg {
@@ -344,13 +343,11 @@
 	</div>
 
 	{#if canChat}
-		<a class="chatcta" href={`/leagues/${id}/chat`}>
-			<MessageSquare size={20} class="cc-ico" />
-			<span class="cc-label">League Chat</span>
+		<a class="chatfab" href={`/leagues/${id}/chat`} aria-label="League chat" title="League chat">
+			<MessageSquare size={24} />
 			{#if chatUnread > 0}
-				<span class="cc-badge">{chatUnread > 99 ? '99+' : chatUnread}</span>
+				<span class="fab-badge">{chatUnread > 99 ? '99+' : chatUnread}</span>
 			{/if}
-			<ChevronRight size={18} class="cc-cv" />
 		</a>
 	{/if}
 
@@ -695,56 +692,47 @@
 		width: auto;
 		padding: 0.6rem;
 	}
-	/* Prominent full-width League Chat entry, below the header actions. */
-	.chatcta {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		width: 100%;
-		margin: 0.2rem 0 1rem;
-		padding: 0.85rem 1rem;
-		background:
-			linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 40%),
-			var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		color: var(--text);
-		font-weight: 700;
-		font-size: 1.02rem;
-		transition:
-			border-color 0.15s ease,
-			background 0.15s ease;
-	}
-	.chatcta:hover {
-		border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-		background: color-mix(in srgb, var(--accent) 6%, var(--surface));
-	}
-	:global(.chatcta .cc-ico) {
-		color: var(--accent);
-		flex: none;
-	}
-	.cc-label {
-		flex: 1;
-	}
-	.cc-badge {
-		flex: none;
-		min-width: 1.3rem;
-		padding: 0.1rem 0.4rem;
+	/* Floating chat button, bottom-right, above the mobile tab bar. */
+	.chatfab {
+		position: fixed;
+		right: 1rem;
+		bottom: calc(var(--nav-h) + 1rem);
+		z-index: 40;
 		display: grid;
 		place-items: center;
+		width: 56px;
+		height: 56px;
 		border-radius: var(--radius-pill);
 		background: var(--accent);
 		color: var(--accent-fg);
-		font-size: 0.78rem;
+		box-shadow: var(--shadow-pop);
+		transition: transform 0.1s ease;
+	}
+	.chatfab:active {
+		transform: scale(0.94);
+	}
+	@media (min-width: 900px) {
+		.chatfab {
+			right: 1.5rem;
+			bottom: 1.5rem;
+		}
+	}
+	.fab-badge {
+		position: absolute;
+		top: -3px;
+		right: -3px;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 0.25rem;
+		display: grid;
+		place-items: center;
+		border-radius: var(--radius-pill);
+		background: var(--danger);
+		color: #fff;
+		font-size: 0.7rem;
 		font-weight: 800;
 		font-variant-numeric: tabular-nums;
-	}
-	:global(.chatcta .cc-cv) {
-		color: var(--muted);
-		flex: none;
-	}
-	.chatcta:hover :global(.cc-cv) {
-		color: var(--accent);
+		border: 2px solid var(--bg);
 	}
 	/* Header "Share" toggle: reveals the invite/share card. Filled accent when
 	   the card is open so the toggle state is obvious. */
