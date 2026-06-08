@@ -24,6 +24,15 @@
 	let leagues = $state<LeagueSummary[]>([]);
 	let ranks = $state<Record<string, Rank | null>>({});
 	let leaguesLoaded = $state(false);
+
+	// Global is the everyone-league — pin it to the top (matches the Leagues
+	// page); other leagues keep the server order (sort is stable).
+	let orderedLeagues = $derived(
+		[...leagues].sort(
+			(a, b) =>
+				Number(b.inviteCode === 'GLOBAL') - Number(a.inviteCode === 'GLOBAL')
+		)
+	);
 	let hasForecast = $state(false);
 	let forecastChecked = $state(false);
 
@@ -258,7 +267,7 @@
 					You're not in a league yet. <a href="/leagues">Create or join one →</a>
 				</p>
 			{:else}
-				{#each leagues as l (l.id)}
+				{#each orderedLeagues as l (l.id)}
 					<a class="lrow" href={`/leagues/${l.id}`}>
 						<span class="lname">{l.name}</span>
 						{#if l.role === 'owner'}<span class="pill">owner</span>{/if}
