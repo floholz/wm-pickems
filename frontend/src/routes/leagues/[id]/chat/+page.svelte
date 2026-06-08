@@ -303,10 +303,19 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		height: calc(100dvh - var(--topbar-h) - var(--nav-h) - 2.75rem);
+		/* Mobile: pin between the fixed top bar and tab bar so only the messages
+		   list scrolls — never the page (which would drag the composer along).
+		   With interactive-widget=resizes-content the layout shrinks when the
+		   keyboard opens, keeping the composer above it. */
+		position: fixed;
+		inset: var(--topbar-h) 0 var(--nav-h) 0;
+		padding: 0.75rem 1rem;
 	}
 	@media (min-width: 900px) {
 		.chat {
+			position: static;
+			inset: auto;
+			padding: 0;
 			height: calc(100dvh - 4rem);
 		}
 	}
