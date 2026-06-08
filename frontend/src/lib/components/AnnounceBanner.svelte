@@ -1,12 +1,14 @@
 <script lang="ts">
 	// In-app announcement banners written by an admin in the Admin console.
-	// Two kinds:
-	//  - dismissible (default): an X removes it for good (per-id in localStorage);
-	//    a new announcement (new id) always shows.
-	//  - persistent: can't be dismissed — only collapsed to a slim ribbon and
-	//    re-expanded. Collapsed state is remembered per-id. It stays until an
-	//    admin deactivates it.
-	// Multiple active announcements stack, newest first.
+	// Two distinct kinds, rendered separately:
+	//
+	//  - persistent: a fixed (sticky) ribbon pinned below the header so it never
+	//    scrolls away. The ribbon is the header; expanding grows a body out of it
+	//    sharing the same background + slim border (no card switch). Can't be
+	//    dismissed — only collapsed/expanded (remembered per-id).
+	//
+	//  - dismissible (default): a normal in-flow card; the X removes it for good
+	//    (per-id in localStorage). A new announcement (new id) always shows.
 	import { onMount } from 'svelte';
 	import { api, type Announcement } from '$lib/api';
 	import {
@@ -78,59 +80,164 @@
 		}
 	});
 
-	// Persistent items can't be dismissed; dismissible ones drop out once dismissed.
-	let visible = $derived(items.filter((a) => a.persistent || !dismissed.has(a.id)));
+	let pinned = $derived(items.filter((a) => a.persistent));
+	let cards = $derived(items.filter((a) => !a.persistent && !dismissed.has(a.id)));
 
 	const icon = { info: Info, success: Megaphone, warn: TriangleAlert };
 </script>
 
-{#if visible.length}
-	<div class="stack">
-		{#each visible as a (a.id)}
+<!-- Persistent: fixed ribbon(s) that stay pinned below the header. -->
+{#if pinned.length}
+	<div class="pinned">
+		{#each pinned as a (a.id)}
 			{@const Icon = icon[a.level] ?? Megaphone}
-			{#if a.persistent && collapsed.has(a.id)}
-				<!-- collapsed: a slim, tappable ribbon -->
+			{@const open = !collapsed.has(a.id)}
+			<div class="pa {a.level}" class:open>
 				<button
-					class="ribbon {a.level}"
-					onclick={() => toggleCollapse(a.id)}
-					aria-label="Expand announcement"
-				>
-					<Icon size={15} />
-					<span class="rtitle">{a.title}</span>
-					<ChevronDown size={16} class="rchev" />
-				</button>
-			{:else if a.persistent}
-				<!-- persistent + expanded: the whole card collapses on click -->
-				<button
-					class="banner tap {a.level}"
-					title="Collapse"
+					class="pahead"
+					aria-expanded={open}
+					title={open ? 'Collapse' : 'Expand'}
 					onclick={() => toggleCollapse(a.id)}
 				>
-					<span class="ico"><Icon size={18} /></span>
-					<span class="text">
-						<strong class="t">{a.title}</strong>
-						<span class="b">{a.body}</span>
-					</span>
-					<span class="x" aria-hidden="true"><ChevronUp size={16} /></span>
+					<Icon size={16} />
+					<span class="patitle">{a.title}</span>
+					{#if open}<ChevronUp size={16} class="pachev" />{:else}<ChevronDown
+							size={16}
+							class="pachev"
+						/>{/if}
 				</button>
-			{:else}
-				<!-- dismissible: static card, only the X removes it -->
-				<div class="banner {a.level}" role="status">
-					<span class="ico"><Icon size={18} /></span>
-					<span class="text">
-						<strong class="t">{a.title}</strong>
-						<span class="b">{a.body}</span>
-					</span>
-					<button class="x" aria-label="Dismiss" onclick={() => dismiss(a.id)}>
-						<X size={16} />
-					</button>
-				</div>
-			{/if}
+				{#if open}
+					<div class="pabody">{a.body}</div>
+				{/if}
+			</div>
+		{/each}
+	</div>
+{/if}
+
+<!-- Dismissible: in-flow cards. -->
+{#if cards.length}
+	<div class="stack">
+		{#each cards as a (a.id)}
+			{@const Icon = icon[a.level] ?? Megaphone}
+			<div class="banner {a.level}" role="status">
+				<span class="ico"><Icon size={18} /></span>
+				<span class="text">
+					<strong class="t">{a.title}</strong>
+					<span class="b">{a.body}</span>
+				</span>
+				<button class="x" aria-label="Dismiss" onclick={() => dismiss(a.id)}>
+					<X size={16} />
+				</button>
+			</div>
 		{/each}
 	</div>
 {/if}
 
 <style>
+	/* ============ persistent: sticky ribbon + grown-out body ============ */
+	.pinned {
+		position: sticky;
+		top: var(--topbar-h);
+		z-index: 20;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+	@media (min-width: 900px) {
+		.pinned {
+			top: 1rem;
+		}
+	}
+	/* One unit: the ribbon fill spans header + body; overflow-clip so the body
+	   shares the rounded corners and the fill never bleeds past the border. */
+	.pa {
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+		background: var(--surface-2);
+		color: var(--text);
+	}
+	.pahead {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.55rem 0.85rem;
+		background: transparent;
+		border: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.patitle {
+		flex: 1;
+		min-width: 0;
+		font-weight: 700;
+		font-size: 0.9rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	:global(.pa .pachev) {
+		flex-shrink: 0;
+		opacity: 0.75;
+	}
+	/* Body grows out of the ribbon: same background, separated by a slim rule. */
+	.pabody {
+		padding: 0.6rem 0.85rem 0.7rem;
+		border-top: 1px solid var(--border);
+		font-size: 0.88rem;
+		line-height: 1.55;
+		white-space: pre-line;
+	}
+
+	/* Info — calm: subtle surface, accent left rule, muted body. */
+	.pa.info {
+		border-left: 3px solid color-mix(in srgb, var(--muted) 45%, var(--border));
+	}
+	.pa.info .pabody {
+		color: var(--muted);
+	}
+	/* Highlight — the landing lock-countdown look: lime gradient, dark ink. */
+	.pa.success {
+		background: linear-gradient(90deg, var(--accent), var(--accent-2));
+		color: var(--accent-ink);
+		border-color: transparent;
+	}
+	.pa.success .pabody {
+		border-color: rgba(8, 17, 10, 0.18);
+	}
+	/* Warning — solid amber, dark ink. */
+	.pa.warn {
+		background: var(--warning);
+		color: #20160a;
+		border-color: transparent;
+	}
+	.pa.warn .pabody {
+		border-color: rgba(32, 22, 10, 0.22);
+	}
+
+	/* On mobile the pinned ribbon spans edge-to-edge — break out of the
+	   app-shell's 1rem gutter (safe: the shell is overflow-x: clip), keep 1rem
+	   inner padding so text still lines up with page content. */
+	@media (max-width: 899px) {
+		.pinned {
+			margin-inline: -1rem;
+		}
+		.pa {
+			border-radius: 0;
+			border-left: none;
+			border-right: none;
+		}
+		.pahead,
+		.pabody {
+			padding-inline: 1rem;
+		}
+	}
+
+	/* ============ dismissible cards (unchanged) ============ */
 	.stack {
 		display: flex;
 		flex-direction: column;
@@ -147,15 +254,6 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 	}
-	/* Persistent expanded card is a button — the whole thing collapses on click. */
-	.banner.tap {
-		width: 100%;
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	/* Info — calm and neutral: flat surface, thin grey rule, outlined icon. */
 	.banner.info {
 		border-left: 3px solid color-mix(in srgb, var(--muted) 45%, var(--border));
 	}
@@ -163,9 +261,6 @@
 		background: var(--surface-2);
 		color: var(--muted);
 	}
-
-	/* Highlight — loud and on-brand: lime wash, filled icon chip, soft glow,
-	   bright title. The visual opposite of the muted info notice. */
 	.banner.success {
 		background: color-mix(in srgb, var(--accent) 13%, var(--surface));
 		border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
@@ -179,8 +274,6 @@
 	.banner.success .t {
 		color: var(--accent-2);
 	}
-
-	/* Warning — amber wash, filled icon. */
 	.banner.warn {
 		background: color-mix(in srgb, var(--warning) 12%, var(--surface));
 		border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
@@ -190,7 +283,6 @@
 		background: var(--warning);
 		color: #20160a;
 	}
-
 	.ico {
 		display: inline-grid;
 		place-items: center;
@@ -230,65 +322,5 @@
 	.x:hover {
 		color: var(--text);
 		background: var(--surface-2);
-	}
-
-	/* ---- collapsed persistent announcement: a slim ribbon (echoes the landing
-	   lock-countdown bar for the highlight level) ---- */
-	.ribbon {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.5rem 0.8rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
-		background: var(--surface-2);
-		color: var(--text);
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-	.ribbon:hover {
-		filter: brightness(1.06);
-	}
-	.rtitle {
-		flex: 1;
-		min-width: 0;
-		font-weight: 700;
-		font-size: 0.9rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	:global(.ribbon .rchev) {
-		flex-shrink: 0;
-		opacity: 0.7;
-	}
-	.ribbon.info {
-		border-left: 3px solid color-mix(in srgb, var(--muted) 45%, var(--border));
-	}
-	.ribbon.success {
-		background: linear-gradient(90deg, var(--accent), var(--accent-2));
-		color: var(--accent-ink);
-		border-color: transparent;
-		font-weight: 700;
-	}
-	.ribbon.warn {
-		background: var(--warning);
-		color: #20160a;
-		border-color: transparent;
-	}
-
-	/* On mobile the collapsed ribbon spans edge-to-edge — break out of the
-	   app-shell's 1rem gutter (which is safe: the shell is overflow-x: clip).
-	   Inner padding stays 1rem so the text still lines up with page content. */
-	@media (max-width: 899px) {
-		.ribbon {
-			margin-inline: -1rem;
-			padding-inline: 1rem;
-			border-radius: 0;
-			border-left: none;
-			border-right: none;
-		}
 	}
 </style>
