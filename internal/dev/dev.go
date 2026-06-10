@@ -9,10 +9,12 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pocketbase/pocketbase/apis"
@@ -40,6 +42,46 @@ const (
 )
 
 func Enabled() bool { return os.Getenv("WMP_DEV") == "1" }
+
+// LoadDotenv loads ./.env into the process environment so `go run .` /
+// `make run` see the same config docker-compose would inject — no container
+// rebuild for local dev. Only active when WMP_DEV=1, and variables already
+// set in the shell always win (so explicit overrides keep working).
+func LoadDotenv() {
+	if !Enabled() {
+		return
+	}
+	b, err := os.ReadFile(".env")
+	if err != nil {
+		return
+	}
+	n := 0
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		k = strings.TrimSpace(strings.TrimPrefix(k, "export "))
+		v = strings.TrimSpace(v)
+		if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+			v = v[1 : len(v)-1]
+		}
+		if k == "" || v == "" {
+			continue
+		}
+		if _, exists := os.LookupEnv(k); !exists {
+			os.Setenv(k, v)
+			n++
+		}
+	}
+	if n > 0 {
+		log.Printf("dev: loaded %d vars from .env", n)
+	}
+}
 
 func intp(v int) *int { return &v }
 

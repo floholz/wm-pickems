@@ -34,6 +34,11 @@ import (
 )
 
 func main() {
+	// Local dev only (WMP_DEV=1): pull ./.env into the environment so go run /
+	// make run match what docker-compose injects. Must happen before anything
+	// reads env (cron config, mail provider selection, etc.).
+	dev.LoadDotenv()
+
 	app := pocketbase.New()
 
 	// Go-code migrations (collections/schema live in ./migrations).
