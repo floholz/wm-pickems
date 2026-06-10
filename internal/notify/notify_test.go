@@ -70,6 +70,10 @@ func TestPrefEnabledFromRaw(t *testing.T) {
 		{"push off while email on", `{"tips_reminder":{"email":true,"push":false}}`, "tips_reminder", "push", false},
 		{"push on while email off", `{"tips_reminder":{"email":false,"push":true}}`, "tips_reminder", "push", true},
 		{"push absent default on", `{"tips_reminder":{"email":false}}`, "tips_reminder", "push", true},
+		{"master email off silences event", `{"*":{"email":false},"tips_reminder":{"email":true}}`, "tips_reminder", "email", false},
+		{"master email off leaves push alone", `{"*":{"email":false}}`, "tips_reminder", "push", true},
+		{"master explicitly on falls through to event", `{"*":{"email":true},"tips_reminder":{"email":false}}`, "tips_reminder", "email", false},
+		{"master absent channel default on", `{"*":{"push":false}}`, "tips_reminder", "email", true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -378,6 +378,10 @@ func prefEnabled(u *core.Record, event, channel string) bool {
 }
 
 // prefEnabledFromRaw is the pure core of prefEnabled, split out for testing.
+// The reserved "*" event holds the user's per-channel master switches: when a
+// channel is off there, it is silenced for every event regardless of the
+// per-event prefs (which stay stored, so flipping the master back restores
+// them).
 func prefEnabledFromRaw(raw, event, channel string) bool {
 	if raw == "" {
 		return true
@@ -385,6 +389,9 @@ func prefEnabledFromRaw(raw, event, channel string) bool {
 	var prefs map[string]map[string]bool
 	if err := json.Unmarshal([]byte(raw), &prefs); err != nil {
 		return true
+	}
+	if v, ok := prefs["*"][channel]; ok && !v {
+		return false
 	}
 	ev, ok := prefs[event]
 	if !ok {

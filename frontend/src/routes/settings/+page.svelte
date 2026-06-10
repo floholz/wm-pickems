@@ -49,6 +49,11 @@
 	const isOn = (key: string, ch: Channel) =>
 		!forcedOff(key, ch) && prefs[key]?.[ch] !== false;
 
+	// Per-channel master switch, stored under the reserved "*" event. When off,
+	// the backend silences that channel for every event; the per-event prefs
+	// stay stored so flipping the master back restores them.
+	const masterOn = (ch: Channel) => prefs['*']?.[ch] !== false;
+
 	// Email verification — unverified addresses receive no email at all, so the
 	// email toggles are locked until the account is verified.
 	let verifyBusy = $state(false);
@@ -342,6 +347,34 @@
 				<span class="col-label">Email</span>
 				<span class="col-label">Push</span>
 			</li>
+			<li class="notify-row notify-master">
+				<div class="notify-text">
+					<span class="notify-label">All notifications</span>
+					<span class="muted notify-hint">
+						Master switch per channel — turning one off silences every email
+						or push below at once.
+					</span>
+				</div>
+				{#each ['email', 'push'] as const as ch}
+					<button
+						type="button"
+						role="switch"
+						aria-checked={!forcedOff('*', ch) && masterOn(ch)}
+						aria-label={`All notifications — ${ch}${forcedOff('*', ch) ? ' (paused by admins)' : ''}`}
+						title={forcedOff('*', ch) ? 'Paused by the admins' : undefined}
+						class="toggle"
+						class:on={!forcedOff('*', ch) && masterOn(ch)}
+						class:forced={forcedOff('*', ch)}
+						onclick={() => toggleNotify('*', ch)}
+						disabled={notifyBusy ||
+							forcedOff('*', ch) ||
+							(ch === 'push' && !push.subscribed) ||
+							(ch === 'email' && unverified)}
+					>
+						<span class="knob"></span>
+					</button>
+				{/each}
+			</li>
 			{#each NOTIFY_EVENTS as ev (ev.key)}
 				<li class="notify-row">
 					<div class="notify-text">
@@ -361,6 +394,7 @@
 							onclick={() => toggleNotify(ev.key, ch)}
 							disabled={notifyBusy ||
 								forcedOff(ev.key, ch) ||
+								!masterOn(ch) ||
 								(ch === 'push' && !push.subscribed) ||
 								(ch === 'email' && unverified)}
 						>
@@ -455,6 +489,12 @@
 	.notify-head {
 		padding: 0.2rem 0 0.4rem;
 		border-top: none;
+	}
+	/* Master row: visually anchored to the column header, separated from the
+	   per-event rows by the regular row border below it. */
+	.notify-master {
+		border-top: none;
+		padding-top: 0.4rem;
 	}
 	.col-label {
 		text-align: center;
